@@ -2,6 +2,14 @@
 #include "perl.h"
 #include "XSUB.h"
 
+/* Between 5.9.1 and 5.9.2 the retstack was removed, and the
+   return op is now stored on the cxstack. */
+#define HAS_RETSTACK (\
+  PERL_REVISION < 5 || \
+  (PERL_REVISION == 5 && PERL_VERSION < 9) || \
+  (PERL_REVISION == 5 && PERL_VERSION == 9 && PERL_SUBVERSION < 2) \
+)
+
 /* Stolen from B.xs */
 
 #ifdef PERL_OBJECT
@@ -207,12 +215,18 @@ parent_op (I32 uplevel, OP** return_op_out)
 	warn("want_scalar: gone too far up the context stack");
 	return 0;
     }
+#if HAS_RETSTACK
     if (uplevel > PL_retstack_ix) {
 	warn("want_scalar: gone too far up the return stack");
 	return 0;
     }
+#endif
     
+#if HAS_RETSTACK
     return_op = PL_retstack[PL_retstack_ix - uplevel - 1];
+#else
+    return_op = cx->blk_sub.retop;
+#endif
     prev_cop = cx->blk_oldcop;
     
     if (return_op_out)
@@ -236,12 +250,18 @@ ancestor_ops (I32 uplevel, OP** return_op_out)
 	warn("want_scalar: gone too far up the context stack");
 	return 0;
     }
+#if HAS_RETSTACK
     if (uplevel > PL_retstack_ix) {
 	warn("want_scalar: gone too far up the return stack");
 	return 0;
     }
+#endif
     
+#if HAS_RETSTACK
     return_op = PL_retstack[PL_retstack_ix - uplevel - 1];
+#else
+    return_op = cx->blk_sub.retop;
+#endif
     prev_cop = cx->blk_oldcop;
     
     if (return_op_out)
@@ -524,14 +544,14 @@ want_assign(uplevel)
 U32 uplevel;
   PREINIT:
     AV* r;
-    oplist* os = ancestor_ops(uplevel, 0);
+    OP* returnop;
+    oplist* os = ancestor_ops(uplevel, &returnop);
     numop* lno = os ? lastnumop(os) : (numop*)0;
     OPCODE type;
   CODE:
     if (lno) type = lno->numop_op->op_type;
     if (lno && (type == OP_AASSIGN || type == OP_SASSIGN) && lno->numop_num == 1)
       if (type == OP_AASSIGN) {
-        OP* returnop = PL_retstack[PL_retstack_ix - uplevel - 1];
         I32 lhs_count = count_list(cBINOPx(lno->numop_op)->op_last,  returnop);
         if (lhs_count == 0) r = newAV();
         else {
@@ -561,8 +581,9 @@ double_return()
         Perl_croak(aTHX_ "Can't return outside a subroutine");
 
     ourcx->cx_type = CXt_NULL;
-
+#if HAS_RETSTACK
     if (PL_retstack_ix > 0)
         --PL_retstack_ix;
+#endif
 
     return;

@@ -48,3 +48,7 @@ Revision history for Perl extension Want.
 	- remove spurious || $n eq 'gelem' from _wantref
         - change i to I32 (rather than U32) to avoid compiler warning
           on Win32
+
+0.08  Mon Dec 13 01:23:28 GMT 2004
+	- Accommodate the changed internals of perl 5.9.2
+          (the retstack is no more: see change #23156).

@@ -12,7 +12,7 @@ our @ISA = qw(Exporter DynaLoader);
 
 our @EXPORT = qw(want rreturn lnoreturn);
 our @EXPORT_OK = qw(howmany wantref);
-our $VERSION = '0.07';
+our $VERSION = '0.08';
 
 bootstrap Want $VERSION;
 
@@ -657,8 +657,7 @@ context. Let me know if this is a problem.
 
 =head1 BUGS
 
-I've fixed all the bugs that I know about.
-Let me know about the bugs that you discover.
+Doesn't work from inside a tie-handler.
 
 =head1 AUTHOR
 
