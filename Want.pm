@@ -11,8 +11,8 @@ require DynaLoader;
 our @ISA = qw(Exporter DynaLoader);
 
 our @EXPORT = qw(want rreturn lnoreturn);
-our @EXPORT_OK = qw(want howmany wantref);
-our $VERSION = '0.06';
+our @EXPORT_OK = qw(howmany wantref);
+our $VERSION = '0.07';
 
 bootstrap Want $VERSION;
 
@@ -117,7 +117,7 @@ sub _wantref {
     elsif ($n eq 'rv2gv' || $n eq 'gelem') {
 	return "GLOB";
     }
-    elsif ($n eq 'rv2sv' || $n eq 'gelem') {
+    elsif ($n eq 'rv2sv') {
 	return "SCALAR";
     }
     elsif ($n eq 'method_call') {
@@ -317,7 +317,7 @@ I<context comes from the left>. Consider code like this:
   list = (1, 2, 3);
   print "\$x = $x; \$y = $y; \$z = $z\n";
 
-This prints C<$x = ; $y = ; $z = 3>, which may not be what ypu were expecting.
+This prints C<$x = ; $y = ; $z = 3>, which may not be what you were expecting.
 The reason is that the assignment is in scalar context, so the comma operator
 is in scalar context too, and discards all values but the last. You can fix
 it by writing C<(list) = (1,2,3);> instead.
@@ -327,7 +327,7 @@ it's in B<ASSIGN> context.  If ASSIGN is the only argument to C<want()>, then
 it returns a reference to an array of the value(s) of the right-hand side.
 
 In this case, you should return with the C<lnoreturn> function, rather than
-an ordinary C<return>.
+an ordinary C<return>. 
 
 This makes it very easy to write lvalue subroutines which do clever things:
 
@@ -345,12 +345,17 @@ This makes it very easy to write lvalue subroutines which do clever things:
     else {
       carp("Not in ASSIGN context");
     }
+    return
   }
  
   print "foo -> ", backstr("foo"), "\n";	# foo -> oof
   backstr(my $robin) = "nibor";
   print "\$robin is now $robin\n";		# $robin is now robin
 
+Notice that you need to put a (meaningless) return
+statement at the end of the function, otherwise you will get the
+error
+I<Can't modify non-lvalue subroutine call in lvalue subroutine return>.
 
 The only way to write that C<backstr> function without using Want is to return
 a tied variable which is tied to a custom class.
@@ -434,7 +439,7 @@ of SCALAR.
 
 This is the primary interface to this module, and should suffice for most
 purposes. You pass it a list of context specifiers, and the return value
-is true whenevr all of the specifiers hold.
+is true whenever all of the specifiers hold.
 
     want('LVALUE', 'SCALAR');   # Are we in scalar lvalue context?
     want('RVALUE', 3);		# Are at least three rvalues wanted?
@@ -678,7 +683,7 @@ http://dev.perl.org/rfc/21.html
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001, Robin Houston. All Rights Reserved.
+Copyright (c) 2001-2003, Robin Houston. All Rights Reserved.
 This module is free software. It may be used, redistributed
 and/or modified under the same terms as Perl itself.
 

@@ -341,7 +341,7 @@ copy_rvals(I32 uplevel, I32 skip)
     I32 oldmarksp;
     I32 mark_from;
     I32 mark_to;
-    U32 i;
+    I32 i;
     AV* a;
 
     oldmarksp = cx->blk_oldmarksp;
@@ -561,6 +561,8 @@ double_return()
         Perl_croak(aTHX_ "Can't return outside a subroutine");
 
     ourcx->cx_type = CXt_NULL;
-    Perl_pop_return(aTHX);
+
+    if (PL_retstack_ix > 0)
+        --PL_retstack_ix;
 
     return;

@@ -1,7 +1,12 @@
+Note: I'm not sure these first two items are necessary
+
 - Improve the error handling (only warn once per call, anyway).
 
 - Benchmark & optimise if necessary
   (i.e. don't get the cx multiple times)
+
+
+But these two are definitely worth looking into:
 
 - See what happens from FETCH/STORE routines (eek!)
 

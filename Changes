@@ -41,3 +41,10 @@ Revision history for Perl extension Want.
 0.06  Fri Jul 25 11:42:13 BST 2003
 	- pass thread context to Perl_pop_return
 	- remove v-string
+
+0.07  Mon Aug 18 10:27:27 BST 2003
+	- do not try to call pop_return (it's private)
+	- update copyright year(s) and fix doc glitches
+	- remove spurious || $n eq 'gelem' from _wantref
+        - change i to I32 (rather than U32) to avoid compiler warning
+          on Win32

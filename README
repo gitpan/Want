@@ -1,18 +1,8 @@
 -----------------------------------------------------------------------------
-| Want v0.06    - Robin Houston, 2003-07-25
+| Want v0.07    - Robin Houston, 2003-08-18
 -----------------------------------------------------------------------------
 
-Changes since v0.05:
-        - pass thread context to pop_return
-        - remove v-string
-
-Changes since v0.04:
-	- tests pass on 5.6.1 and above
-	- added 'rreturn' and 'lnoreturn' functions
-
-For the full list of changes, see the Changes file.
 For full documentation, see the POD included with the module.
-
 Below is a brief extract of the documentation, to give you an
 idea of what this module does. It requires Perl version 5.6 or
 later.
@@ -40,6 +30,7 @@ SYNOPSIS
              elsif (want('HASH')) {
                rreturn { foo => 17, bar => 23 };
              }
+             return
          }
 
 DESCRIPTION
@@ -89,6 +80,7 @@ EXAMPLES
         else {
             carp("Not in ASSIGN context");
         }
+        return
     }
  
     print "foo -> ", backstr("foo"), "\n";	# foo -> oof
