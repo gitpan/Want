@@ -1,10 +1,20 @@
 -----------------------------------------------------------------------------
-| Want v0.01    - Robin Houston, 2001-07-15
+| Want v0.02    - Robin Houston, 2001-07-16
 -----------------------------------------------------------------------------
+
+Changes since v0.01:
+        - Give correct expectation count for constructs like
+                my ($x, $y, $z) = (23, foo());   # foo's expectation count is 2
+        - want(2) should be true in C<@x = foo()> etc;
+          i.e. infinity > N for any finite N  :-)
+        - Support '!' negative requests
+        - correct expectation count for slices
+
 
 For full documentation, see the POD included with the module.
 Below is a brief extract of the documentation, to give you an
-idea of what this module does.
+idea of what this module does. It requires Perl version 5.6 or
+later.
 
 
 NAME

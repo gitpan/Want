@@ -1,4 +1,4 @@
-BEGIN { $| = 1; print "1..40\n"; }
+BEGIN { $| = 1; print "1..51\n"; }
 
 # Test that we can load the module
 END {print "not ok 1\n" unless $loaded;}
@@ -131,8 +131,8 @@ sub ng :lvalue {
 (undef) =  g(29, 'LIST', 1);
 (undef) = ng(30, 'LIST', 2);
 
-$x      =  g(31, 'NONLIST', 1);
-$x      = ng(32, 'NONLIST', 2);
+$x      =  g(31, '!LIST', 1);
+$x      = ng(32, '!LIST', 2);
 
 g(33, 'RVALUE', 'VOID');
 g(34, 'LVALUE', 'SCALAR') = 23;
@@ -147,3 +147,18 @@ ng(39, 'REF');
 &{g(40, 'CODE')};
 sub main::23 {}
 
+(undef, undef,  undef) = ($x,  g(41, 2));
+(undef, undef,  undef) = ($x, ng(42, 3));
+
+($x) = ($x, ng(43, 1));
+
+@x = g(44, 2);
+%x = g(45, 'Infinity');
+@x{@x} = g(46, 'Infinity');
+
+@x[1, 2] = g(47, 2, '!3');
+@x{@x{1, 2}} = g(48, 2, '!3');
+@x{()} = g(49, 0, '!1');
+
+@x = (@x, g(50, 'Infinity'));
+($x) = (@x, g(51, '!1'));

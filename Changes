@@ -3,4 +3,12 @@ Revision history for Perl extension Want.
 0.01  Sun Jul  1 18:04:58 2001
 	- original version; created by h2xs 1.1.1.4 with options
 		-A Want
+	- Published to CPAN on 2001-07-15
 
+0.02  Mon Jul 16 10:06:15 2001
+	- Give correct expectation count for constructs like
+		my ($x, $y, $z) = (23, foo());   # foo's expectation count is 2
+	- want(2) should be true in C<@x = foo()> etc;
+	  i.e. infinity > N for any finite N  :-)
+	- Support '!' negative requests
+	- correct expectation count for slices

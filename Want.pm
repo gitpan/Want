@@ -11,7 +11,7 @@ require DynaLoader;
 our @ISA = qw(Exporter DynaLoader);
 
 our @EXPORT_OK = qw(want howmany wantref);
-our $VERSION = '0.01';
+our $VERSION = '0.02';
 
 bootstrap Want $VERSION;
 
@@ -22,40 +22,54 @@ my %reftype = (
     GLOB  => 1,
 );
 
+sub _wantone {
+    my ($uplevel, $arg) = @_;
+    
+    my $wantref = _wantref($uplevel + 1);
+
+    if	  ($arg =~ /^\d+$/) {
+	my $want_count = want_count($uplevel);
+	return ($want_count == -1 || $want_count >= $arg);
+    }
+    elsif (lc($arg) eq 'infinity') {
+	return (want_count($uplevel) == -1);
+    }
+    elsif ($arg eq 'REF') {
+	return $wantref;
+    }
+    elsif ($reftype{$arg}) {
+	return ($wantref eq $arg);
+    }
+    elsif ($arg eq 'LVALUE') {
+	return want_lvalue($uplevel);
+    }
+    elsif ($arg eq 'RVALUE') {
+	return !want_lvalue($uplevel);
+    }
+    elsif ($arg eq 'VOID') {
+	return !defined(wantarray_up($uplevel));
+    }
+    elsif ($arg eq 'SCALAR') {
+	my $gimme = wantarray_up($uplevel);
+	return (defined($gimme) && 0 == $gimme);
+    }
+    elsif ($arg eq 'LIST') {
+	return wantarray_up($uplevel);
+    }
+    else {
+	croak ("want: Unrecognised specifier $arg");
+    }    
+}
+
 sub want {
     my @args = @_;
     
-    my $wantref = _wantref(2);
     for my $arg (@args) {
-	if    ($arg =~ /^\d+$/) {
-	    return 0 unless want_count(1) >= $arg;
-	}
-	elsif ($arg eq 'REF') {
-	    return 0 unless $wantref;
-	}
-	elsif ($reftype{$arg}) {
-	    return 0 unless defined($wantref) && $wantref eq $arg;
-	}
-	elsif ($arg eq 'LVALUE') {
-	    return 0 unless want_lvalue(1);
-	}
-	elsif ($arg eq 'RVALUE') {
-	    return 0 unless !want_lvalue(1);
-	}
-	elsif ($arg eq 'VOID') {
-	    return 0 unless !defined(wantarray_up(1));
-	}
-	elsif ($arg eq 'SCALAR') {
-	    return 0 unless defined(wantarray_up(1)) && 0 == wantarray_up(1);
-	}
-	elsif ($arg eq 'NONLIST') {
-	    return 0 unless !wantarray_up(1);
-	}
-	elsif ($arg eq 'LIST') {
-	    return 0 unless wantarray_up(1);
+	if ($arg =~ /^!(.*)/) {
+	    return 0 unless !_wantone(2, $1);
 	}
 	else {
-	    croak ("want: Unrecognised specifier $arg");
+	    return 0 unless _wantone(2, $arg);
 	}
     }
     
@@ -241,10 +255,54 @@ definition of a sub which is being called as above, then:
     want(2) returns true
     want(3) returns false
 
+Sometimes there is no limit to the number of items that might be used:
+
+    my @x = foo();
+    do_something_with( foo() );
+
+In this case, C<want(2)>, C<want(100)>, C<want(1E9)> and so on will all return
+true; and so will C<want('Infinity')>.
+
 The C<howmany> function can be used to find out how many items are wanted.
 If the context is scalar, then C<want(1)> returns true and C<howmany()> returns
 1. If you want to check whether your result is being assigned to a singleton
 list, you can say C<if (want('LIST', 1)) { ... }>.
+
+=head1 FUNCTIONS
+
+=over 4
+
+=item want(SPECIFIERS)
+
+This is the primary interface to this module, and should suffice for most
+purposes. You pass it a list of context specifiers, and the return value
+is true whenevr all of the specifiers hold.
+
+    want('LVALUE', 'SCALAR');   # Are we in scalar lvalue context?
+    want('RVALUE', 3);		# Does the caller want at least three rvalues?
+    want('ARRAY');		# Is the return value being used as an array reference?
+
+You can also prefix a specifier with an exclamation mark to indicate that you
+B<don't> want it to be true
+
+    want(2, '!3');		# Caller wants exactly two items
+    want(qw'REF !CODE !GLOB');  # Expecting a reference that isn't a CODE or GLOB ref
+    want(100, '!Infinity');	# Expecting at least 100 items, but there is a limit
+    
+=item howmany()
+
+Returns the I<expectation count>, i.e. the number of items expected. If the 
+expectation count is undefined, that
+indicates that an unlimited number of items might be used (e.g. the return
+value is being assigned to an array). In void context the expectation count
+is zero, and in scalar context it is one.
+
+=item wantref()
+
+Returns the type of reference which the caller is expecting, or the empty string
+if the caller isn't expecting a reference immediately.
+
+=back
 
 =head1 EXAMPLES
 
@@ -288,6 +346,18 @@ This is the first release of this module, and the public interface may change in
 future versions. It's too early to make any guarantees about interface stability.
 
 I'd be interested to know how you're using this module.
+
+=head1 BUGS
+
+Expectation counts are determined as well as possible from examining the calling
+expression, without taking into account the actual values of variables. In
+particular, arrays are always assumed to be arbitrarily long; so if you have
+
+    my @x = (1);
+    my ($x, $y) = (@x, foo());
+
+then the expectation count for foo() is given as zero, even though one value
+will be used in this case. I hope this can be corrected in a future version.
 
 =head1 AUTHOR
 

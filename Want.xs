@@ -125,7 +125,7 @@ find_parent_from(OP* start, OP* next, OP* parent)
  *  (In that last case, we must be in void context.)
  */
 OP*
-parent_op (I32 uplevel)
+parent_op (I32 uplevel, OP** return_op_out)
 {
     OP* return_op = Nullop;
     PERL_CONTEXT* cx = upcontext(uplevel);
@@ -143,14 +143,49 @@ parent_op (I32 uplevel)
     return_op = PL_retstack[PL_retstack_ix - uplevel - 1];
     prev_cop = cx->blk_oldcop;
     
+    if (return_op_out)
+	*return_op_out = return_op;
+
     return find_parent_from((OP*)prev_cop, return_op, Nullop);
 }
 
+/* forward declaration - mutual recursion */
+I32 count_list (OP* parent, OP* returnop);
+
+I32 count_slice (OP* o) {
+    OP* pm = cUNOPo->op_first;
+    OP* l  = Nullop;
+    
+    if (pm->op_type != OP_PUSHMARK)
+	die("%s", "Want panicked: slice doesn't start with pushmark\n");
+	
+    if ( (l = pm->op_sibling) && (l->op_type == OP_LIST))
+	return count_list(l, Nullop);
+
+    else if (l)
+	switch (l->op_type) {
+	case OP_RV2AV:
+	case OP_RV2HV:
+	    return 0;
+	case OP_HSLICE:
+	case OP_ASLICE:
+	    return count_slice(l);
+	case OP_STUB:
+	    return 1;
+	default:
+	    die("Want panicked: Unexpected op in slice (%s)\n", PL_op_name[l->op_type]);
+	}
+	
+    else
+	die("Want panicked: Nothing follows pushmark in slice\n");
+}
+
 /** Count the number of children of this OP.
- *  Except if any of them is OP_RV2AV, return 0 instead.
+ *  Except if any of them is OP_RV2AV or OP_ENTERSUB, return 0 instead.
+ *  Also, stop counting if an OP_ENTERSUB is reached whose op_next is <returnop>.
  */
 I32
-count_lhs (OP* parent)
+count_list (OP* parent, OP* returnop)
 {
     OP* o;
     I32 i = 0;
@@ -159,9 +194,19 @@ count_lhs (OP* parent)
 	return 0;
 	
     for(o = cUNOPx(parent)->op_first; o; o=o->op_sibling) {
-	if (o->op_type == OP_RV2AV)
+	if (returnop && o->op_type == OP_ENTERSUB && o->op_next == returnop)
+	    return i;
+	if (o->op_type == OP_RV2AV || o->op_type == OP_RV2HV || o->op_type == OP_ENTERSUB)
 	    return 0;
-	++i;
+	
+	if (o->op_type == OP_HSLICE || o->op_type == OP_ASLICE) {
+	    I32 slice_length = count_slice(o);
+	    if (slice_length == 0)
+		return 0;
+	    else
+		i += slice_length - 1;
+	}
+	else ++i;
     }
 
     return i;
@@ -214,7 +259,7 @@ char*
 parent_op_name(uplevel)
 I32 uplevel;
   PREINIT:
-    OP* o = parent_op(uplevel);
+    OP* o = parent_op(uplevel, 0);
   CODE:
     RETVAL = o ? PL_op_name[o->op_type] : "(none)";
   OUTPUT:
@@ -224,11 +269,17 @@ I32
 want_count(uplevel)
 I32 uplevel;
   PREINIT:
-    OP* o = parent_op(uplevel);
+    OP* returnop;
+    OP* o = parent_op(uplevel, &returnop);
     U8 gimme = want_gimme(uplevel);
   CODE:
-    if (o && o->op_type == OP_AASSIGN)
-	RETVAL = count_lhs(cBINOPo->op_last) - 1;
+    if (o && o->op_type == OP_AASSIGN) {
+	I32 lhs = count_list(cBINOPo->op_last, Nullop   );
+	I32 rhs = count_list(cBINOPo->op_first, returnop);
+	if      (lhs == 0) RETVAL = -1;		/* (..@x..) = (..., foo(), ...); */
+	else if (rhs == 0) RETVAL =  0;		/* (...) = (@x, foo()); */
+	else RETVAL = lhs - rhs;
+    }
     else switch(gimme) {
       case G_ARRAY:
         RETVAL = -1;
