@@ -12,3 +12,13 @@ Revision history for Perl extension Want.
 	  i.e. infinity > N for any finite N  :-)
 	- Support '!' negative requests
 	- correct expectation count for slices
+
+0.03  Wed Jul 25 12:03:01 BST 2001
+	- Fix documentation snafus
+	- add want('COUNT') as a synonym for C<howmany>
+	  and want('REF') for C<wantref>
+	- BOOLEAN context
+	- now compiles & passes tests under ithreads
+	- SCALARREF and OBJECT reference contexts
+	  (want('REF') eq 'SCALAR' || want('REF') eq 'OBJECT')
+	- Reorganised test suite

@@ -1,0 +1,15 @@
+- Split test suite out into separate files testing different bits.
+
+- Get expectation count right in
+    my @x = (1);
+    my ($x, $y) = (@x, foo());
+
+- Want::rvalues()
+
+- Benchmark & optimise if necessary
+
+- See what happens from FETCH/STORE routines (eek!)
+
+- NUMBER, INTEGER (and STRING?) contexts. This will involve
+  constructing a large and tedious table of ops indicating which
+  args are treated as which sort of value.

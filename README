@@ -1,6 +1,18 @@
 -----------------------------------------------------------------------------
-| Want v0.02    - Robin Houston, 2001-07-16
+| Want v0.03    - Robin Houston, 2001-07-25
 -----------------------------------------------------------------------------
+
+
+Changes since v0.02:
+	- Fix documentation snafus
+	- add want('COUNT') as a synonym for C<howmany>
+	  and want('REF') for C<wantref>
+	- BOOLEAN context
+	- now compiles & passes tests under ithreads
+	- SCALARREF and OBJECT reference contexts
+	  (want('REF') eq 'SCALAR' || want('REF') eq 'OBJECT')
+	- Reorganised test suite
+	
 
 Changes since v0.01:
         - Give correct expectation count for constructs like
@@ -26,7 +38,7 @@ SYNOPSIS
              if    (want('lvalue')) {
                return $x;
              }
-             elsif (want->{LIST}) {
+             elsif (want('LIST')) {
                return (1, 2, 3);
          }
 
@@ -67,7 +79,7 @@ EXAMPLES
 
 
 AUTHOR
-       Robin Houston, <robin@kitsite.com>
+       Robin Houston, <robin@cpan.org>
 
 SEE ALSO
        o   the wantarray entry in the perlfunc manpage

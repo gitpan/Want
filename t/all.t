@@ -1,4 +1,4 @@
-BEGIN { $| = 1; print "1..51\n"; }
+BEGIN { $| = 1; print "1..57\n"; }
 
 # Test that we can load the module
 END {print "not ok 1\n" unless $loaded;}
@@ -29,15 +29,15 @@ sub foo {
     ++$t;
     my $c = Want::want_count(0);
     print ($c == shift() ? "ok $t\n" : "not ok $t\t# $c\n");
-    "";
+    shift;
 }
 
 ($x, undef) = foo(4, "aassign", 2);
-$x = 2 + foo(6, "add", 1);
+$x = 2 + foo(6, "add", 1, 7);
 
 foo(8, "(none)", 0);
 
-print foo(10, "print", -1);
+print foo(10, "print", -1, "");
 
 @x = foo (12, "aassign", -1);
 
@@ -57,9 +57,9 @@ sub wh {
     print ($ref eq 'HASH' ? "ok $n\n" : "not ok $n\t# $ref\n");
     {}
 }
-wh(15)->{foo};
-%{wh(16)};
-@{wh(17)}{qw/foo bar/};
+$x= wh(15)->{foo};
+@x= %{wh(16)};
+@x= @{wh(17)}{qw/foo bar/};
 
 sub wg {
     my $n = shift();
@@ -67,8 +67,8 @@ sub wg {
     print ($ref eq 'GLOB' ? "ok $n\n" : "not ok $n\t# $ref\n");
     \*foo;
 }
-*{wg(18)};
-*{wg(19)}{FORM};
+$x= *{wg(18)};
+$x= *{wg(19)}{FORM};
 
 sub wa {
     my $n = shift();
@@ -76,9 +76,8 @@ sub wa {
     print ($ref eq 'ARRAY' ? "ok $n\n" : "not ok $n\t# $ref\n");
     [];
 }
-@{wa(20)};
-${wa(21)}[23];
-wa(22)->[24];
+@x= @{wa(20)};
+wa(22)->[24] = ${wa(21)}[23];
 
 #  howmany()
 
@@ -136,29 +135,54 @@ $x      = ng(32, '!LIST', 2);
 
 g(33, 'RVALUE', 'VOID');
 g(34, 'LVALUE', 'SCALAR') = 23;
-@x = g(35, 'RVALUE', 'LIST');
-@x = \(g(36, 'LVALUE', 'LIST'));
-($x) = \(scalar g(37, 'RVALUE'));
-$$x = 29;
-print ($y != 29 ? "ok 37\n" : "not ok 37\n");
+print ($y == 23 ? "ok 35\n" : "not ok 35\n");
 
-g(38, 'HASH')->{foo};
-ng(39, 'REF');
-&{g(40, 'CODE')};
+@x = g(36, 'RVALUE', 'LIST');
+@x = \(g(37, 'LVALUE', 'LIST'));
+($x) = \(scalar g(38, 'RVALUE'));
+$$x = 29;
+print ($y != 29 ? "ok 39\n" : "not ok 39\n");
+
+ng(41, 'REF') = g(40, 'HASH')->{foo};
+$y = sub {}; # Just to silence warning
+$x = defined &{g(42, 'CODE')};
 sub main::23 {}
 
-(undef, undef,  undef) = ($x,  g(41, 2));
-(undef, undef,  undef) = ($x, ng(42, 3));
+(undef, undef,  undef) = ($x,  g(43, 2));
+(undef, undef,  undef) = ($x, ng(44, 3));
 
-($x) = ($x, ng(43, 1));
+($x) = ($x, ng(45, 1));
 
-@x = g(44, 2);
-%x = g(45, 'Infinity');
-@x{@x} = g(46, 'Infinity');
+@x = g(46, 2);
+%x = (1 => g(47, 'Infinity'));
+@x{@x} = g(48, 'Infinity');
 
-@x[1, 2] = g(47, 2, '!3');
-@x{@x{1, 2}} = g(48, 2, '!3');
-@x{()} = g(49, 0, '!1');
+@x[1, 2] = g(49, 2, '!3');
 
-@x = (@x, g(50, 'Infinity'));
-($x) = (@x, g(51, '!1'));
+%x=(1=>23, 2=>"seven", 23=>9, seven=>2);
+@x{@x{1, 2}} = g(50, 2, '!3');
+@x{()} = g(51, 0, '!1');
+
+@x = (@x, g(52, 'Infinity'));
+($x) = (@x, g(53, '!1'));
+
+
+# Check the want('COUNT') and want('REF') synonyms
+
+sub tCOUNT {
+  my ($t, $w) = @_;
+  my $a = want('COUNT');
+  print ($w == $a ? "ok $t\n" : "not ok $t\t# $a\n");
+}
+
+tCOUNT(54, 0);
+$x = tCOUNT(55, 1);
+(undef, $x) = tCOUNT(56, 2);
+
+sub tREF {
+  my ($t, $w) = @_;
+  my $a = want('REF');
+  print ($w eq $a ? "ok $t\n" : "not ok $t\t# $a\n");
+}
+
+$x = ${tREF(57, 'SCALAR')};

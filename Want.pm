@@ -11,22 +11,22 @@ require DynaLoader;
 our @ISA = qw(Exporter DynaLoader);
 
 our @EXPORT_OK = qw(want howmany wantref);
-our $VERSION = '0.02';
+our $VERSION = '0.03';
 
 bootstrap Want $VERSION;
 
 my %reftype = (
-    ARRAY => 1,
-    HASH  => 1,
-    CODE  => 1,
-    GLOB  => 1,
+    ARRAY  => 1,
+    HASH   => 1,
+    CODE   => 1,
+    GLOB   => 1,
+    OBJECT => 1,
 );
 
 sub _wantone {
     my ($uplevel, $arg) = @_;
     
     my $wantref = _wantref($uplevel + 1);
-
     if	  ($arg =~ /^\d+$/) {
 	my $want_count = want_count($uplevel);
 	return ($want_count == -1 || $want_count >= $arg);
@@ -39,6 +39,9 @@ sub _wantone {
     }
     elsif ($reftype{$arg}) {
 	return ($wantref eq $arg);
+    }
+    elsif ($arg eq 'REFSCALAR') {
+	return ($wantref eq 'SCALAR');
     }
     elsif ($arg eq 'LVALUE') {
 	return want_lvalue($uplevel);
@@ -53,8 +56,14 @@ sub _wantone {
 	my $gimme = wantarray_up($uplevel);
 	return (defined($gimme) && 0 == $gimme);
     }
+    elsif ($arg eq 'BOOLEAN') {
+	return want_boolean($uplevel) && defined(wantarray_up($uplevel));
+    }
     elsif ($arg eq 'LIST') {
 	return wantarray_up($uplevel);
+    }
+    elsif ($arg eq 'COUNT') {
+	croak("want: COUNT must be the *only* parameter");
     }
     else {
 	croak ("want: Unrecognised specifier $arg");
@@ -64,6 +73,12 @@ sub _wantone {
 sub want {
     my @args = @_;
     
+    # Deal with special cases (for RFC21-consistency):
+    if (1 == @args) {
+	goto &wantref if $args[0] eq 'REF';
+	goto &howmany if $args[0] eq 'COUNT';
+    }
+        
     for my $arg (@args) {
 	if ($arg =~ /^!(.*)/) {
 	    return 0 unless !_wantone(2, $1);
@@ -97,6 +112,12 @@ sub _wantref {
     elsif ($n eq 'rv2gv' || $n eq 'gelem') {
 	return "GLOB";
     }
+    elsif ($n eq 'rv2sv' || $n eq 'gelem') {
+	return "SCALAR";
+    }
+    elsif ($n eq 'method_call') {
+	return 'OBJECT';
+    }
     else {
 	return "";
     }
@@ -117,7 +138,7 @@ Want - Implement the C<want> command
       if    (want('lvalue')) {
         return $x;
       }
-      elsif (want->{LIST}) {
+      elsif (want('LIST')) {
         return (1, 2, 3);
   }
 
@@ -226,19 +247,25 @@ arguments. They're rare in contemporary Perl code, but still possible:
 
 =head2 Reference context:
 
-Sometimes in list context the caller is expecting a reference of some sort
+Sometimes in scalar context the caller is expecting a reference of some sort
 to be returned:
 
     print foo()->();     # CODE reference expected
     print foo()->{bar};  # HASH reference expected
     print foo()->[23];   # ARRAY reference expected
+    print ${foo()};	 # SCALAR reference expected
+    print foo()->bar();	 # OBJECT reference expected
     
     my $format = *{foo()}{FORMAT} # GLOB reference expected
 
 You can check this using conditionals like C<if (want('CODE'))>.
 There is also a function C<wantref()> which returns one of the strings
-"CODE", "HASH", "ARRAY" or "GLOB"; or the empty string if a reference
-is not expected.
+"CODE", "HASH", "ARRAY", "GLOB", "SCALAR" or "OBJECT"; or the empty string
+if a reference is not expected.
+
+Because C<want('SCALAR')> is already used to select ordinary scalar context,
+you have to use C<want('REFSCALAR')> to find out if a SCALAR reference is
+expected. Or you could use C<want('REF') eq 'SCALAR'> of course.
 
 =head2 Item count
 
@@ -268,6 +295,25 @@ If the context is scalar, then C<want(1)> returns true and C<howmany()> returns
 1. If you want to check whether your result is being assigned to a singleton
 list, you can say C<if (want('LIST', 1)) { ... }>.
 
+
+=head2 Boolean context
+
+Sometimes the caller is only interested in the truth or falsity of a function's
+return value:
+
+    if (everything_is_okay()) {
+	# Carry on
+    }
+    
+    print (foo() ? "ok\n" : "not ok\n");
+    
+In the following example, all subroutine calls are in BOOLEAN context:
+
+    my $x = ( (foo() && !bar()) xor (baz() || quux()) );
+
+Boolean context, like the reference contexts above, is considered to be a subcontext
+of SCALAR.
+
 =head1 FUNCTIONS
 
 =over 4
@@ -279,16 +325,27 @@ purposes. You pass it a list of context specifiers, and the return value
 is true whenevr all of the specifiers hold.
 
     want('LVALUE', 'SCALAR');   # Are we in scalar lvalue context?
-    want('RVALUE', 3);		# Does the caller want at least three rvalues?
-    want('ARRAY');		# Is the return value being used as an array reference?
+    want('RVALUE', 3);		# Are at least three rvalues wanted?
+    want('ARRAY');	# Is the return value used as an array ref?
 
 You can also prefix a specifier with an exclamation mark to indicate that you
 B<don't> want it to be true
 
-    want(2, '!3');		# Caller wants exactly two items
-    want(qw'REF !CODE !GLOB');  # Expecting a reference that isn't a CODE or GLOB ref
-    want(100, '!Infinity');	# Expecting at least 100 items, but there is a limit
-    
+    want(2, '!3');		# Caller wants exactly two items.
+    want(qw'REF !CODE !GLOB');  # Expecting a reference that
+    				#   isn't a CODE or GLOB ref.
+    want(100, '!Infinity');	# Expecting at least 100 items,
+    				#   but there is a limit.
+
+If the I<REF> keyword is the only parameter passed, then the type of reference will be
+returned.  This is just a synonym for the C<wantref> function: it's included because
+you might find it useful if you don't want to pollute your namespace by importing
+several functions, and to conform to Damian Conway's suggestion in RFC 21.
+
+Finally, the keyword I<COUNT> can be used, provided that it's the only keyword
+you pass. Mixing COUNT with other keywords is an error. This is a synonym for the
+C<howmany> function.
+
 =item howmany()
 
 Returns the I<expectation count>, i.e. the number of items expected. If the 
@@ -297,10 +354,14 @@ indicates that an unlimited number of items might be used (e.g. the return
 value is being assigned to an array). In void context the expectation count
 is zero, and in scalar context it is one.
 
+The same as C<want('COUNT')>.
+
 =item wantref()
 
 Returns the type of reference which the caller is expecting, or the empty string
 if the caller isn't expecting a reference immediately.
+
+The same as C<want('REF')>.
 
 =back
 
@@ -342,10 +403,25 @@ C<Want::want>.
 
 =head1 INTERFACE
 
-This is the first release of this module, and the public interface may change in
-future versions. It's too early to make any guarantees about interface stability.
+This module is still under early development, and the public interface may change in
+future versions. I can't yet make any guarantees about interface stability.
 
 I'd be interested to know how you're using this module.
+
+=head1 SUBTLETIES
+
+There are two different levels of B<BOOLEAN> context. I<Pure> boolean context
+occurs in conditional expressions, and the operands of the I<xor> and I<!>/I<not>
+operators.
+Pure boolean context also propagates down through the I<&&> and I<||> operators.
+
+However, consider an expression like C<my $x = foo() && "yes">. The subroutine
+is called in I<pseudo>-boolean context - its return value isn't B<entirely>
+ignored, because the undefined value, the empty string and the integer 0 are
+all false.
+
+At the moment C<want('BOOLEAN')> is true in either pure or pseudo boolean
+context. Let me know if this is a problem.
 
 =head1 BUGS
 
@@ -357,11 +433,12 @@ particular, arrays are always assumed to be arbitrarily long; so if you have
     my ($x, $y) = (@x, foo());
 
 then the expectation count for foo() is given as zero, even though one value
-will be used in this case. I hope this can be corrected in a future version.
+will be used in this case. I hope this will be corrected in a future version,
+so don't rely on it.
 
 =head1 AUTHOR
 
-Robin Houston, E<lt>robin@kitsite.comE<gt>
+Robin Houston, E<lt>robin@cpan.orgE<gt>
 
 =head1 SEE ALSO
 

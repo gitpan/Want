@@ -2,6 +2,9 @@ Changes
 MANIFEST
 Makefile.PL
 README
+TODO
 Want.pm
 Want.xs
-test.pl
+t/all.t
+t/boolean.t
+t/object.t
