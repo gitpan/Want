@@ -549,3 +549,18 @@ U32 uplevel;
     if (os) free(os);
   OUTPUT:
     RETVAL
+
+void
+double_return()
+  PREINIT:
+    PERL_CONTEXT *ourcx, *cx;
+  PPCODE:
+    ourcx = upcontext(aTHX_ 0);
+    cx    = upcontext(aTHX_ 1);
+    if (!cx)
+        Perl_croak(aTHX_ "Can't return outside a subroutine");
+
+    ourcx->cx_type = CXt_NULL;
+    pop_return();
+
+    return;

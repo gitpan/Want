@@ -33,14 +33,16 @@ sub backstr :lvalue {
 	carp("Not in ASSIGN context") unless want('ASSIGN');
 	my $a = want('ASSIGN');
 	$_[0] = reverse $a;
-	return $a;	# Harmless...
+	lnoreturn;
     }
     else {
-	return scalar reverse $_[0];
+	rreturn scalar reverse $_[0];
     }
+    die; return;
 }
 
-print (backstr("qwerty") eq "ytrewq" ? "ok 7\n" : "not ok 7\n");
+my $b = backstr("qwerty");
+print ($b eq "ytrewq" ? "ok 7\n" : "not ok 7\t# $b\n");
 backstr(my $foo) = "robin";
 print ($foo eq 'nibor' ? "ok 8\n" : "not ok 8\n");
 

@@ -33,3 +33,7 @@ Revision history for Perl extension Want.
 	- don't throw an error if RVALUE/LVALUE are used from a non-lvalue sub
 	- specifiers can also now be space-separated, e.g.:
 		want('LVALUE ASSIGN');
+
+0.05  Tue Aug 28 22:14:48 BST 2001
+	- tests pass on 5.6.1 and above
+	- added 'rreturn' and 'lnoreturn' functions

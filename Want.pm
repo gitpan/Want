@@ -10,9 +10,9 @@ require DynaLoader;
 
 our @ISA = qw(Exporter DynaLoader);
 
-our @EXPORT = 'want';
+our @EXPORT = qw(want rreturn lnoreturn);
 our @EXPORT_OK = qw(want howmany wantref);
-our $VERSION = '0.04';
+our $VERSION = '0.05';
 
 bootstrap Want $VERSION;
 
@@ -141,6 +141,22 @@ sub _wantassign {
     }
 }
 
+sub rreturn (@) {
+    if (want_lvalue(1)) {
+        croak "Can't rreturn in lvalue context";
+    }
+    double_return();
+    return wantarray ? @_ : $_[$#_];
+}
+
+sub lnoreturn () {
+    if (!want_lvalue(1) || !want_assign(1)) {
+        croak "Can't lnoreturn except in ASSIGN context";
+    }
+    double_return();
+    return undef;
+}
+
 1;
 
 __END__
@@ -151,27 +167,25 @@ Want - A generalisation of C<wantarray>
 
 =head1 SYNOPSIS
 
-  use Want ('want');
+  use Want;
   sub foo :lvalue {
       if    (want(qw'LVALUE ASSIGN')) {
         print "We have been assigned ", want('ASSIGN');
-        return undef;
+        lnoreturn;
       }
       elsif (want('LIST')) {
-        return (1, 2, 3);
+        rreturn (1, 2, 3);
       }
       elsif (want('BOOL')) {
-        return 0;
+        rreturn 0;
       }
       elsif (want(qw'SCALAR !REF')) {
-        return 23;
+        rreturn 23;
       }
       elsif (want('HASH')) {
-        return { foo => 17, bar => 23 };
+        rreturn { foo => 17, bar => 23 };
       }
-      else {
-        return;
-      }
+      return;  # You have to put this at the end to keep the compiler happy
   }
 
 =head1 DESCRIPTION
@@ -247,6 +261,10 @@ The caller is definitely not trying to assign to the result:
 If the sub is declared without the C<:lvalue> attribute, then it will
 I<always> be in RVALUE context.
 
+If you need to return values from an lvalue subroutine in RVALUE context,
+you should use the C<rreturn> function rather than an ordinary C<return>.
+Otherwise you'll probably get a compile-time error in perl 5.6.1 and later.
+
 =item B<LVALUE>
 
 Either the caller is directly assigning to the result of the sub call:
@@ -307,6 +325,10 @@ it by writing C<(list) = (1,2,3);> instead.
 If your lvalue subroutine is used on the left of an assignment statement,
 it's in B<ASSIGN> context.  If ASSIGN is the only argument to C<want()>, then
 it returns a reference to an array of the value(s) of the right-hand side.
+
+In this case, you should return with the C<lnoreturn> function, rather than
+an ordinary C<return>.
+
 This makes it very easy to write lvalue subroutines which do clever things:
 
   use Want;
@@ -315,10 +337,10 @@ This makes it very easy to write lvalue subroutines which do clever things:
     if (want(qw'LVALUE ASSIGN')) {
       my ($a) = want('ASSIGN');
       $_[0] = reverse $a;
-      return undef;
+      lnoreturn;
     }
     elsif (want('RVALUE')) {
-      my $t = scalar reverse $_[0];
+      rreturn scalar reverse $_[0];
     }
     else {
       carp("Not in ASSIGN context");
@@ -437,6 +459,24 @@ you pass. Mixing COUNT with other keywords is an error. This is a synonym for th
 C<howmany> function.
 
 A full list of the permitted keyword is in the B<ARGUMENTS> section below.
+
+=item rreturn
+
+Use this function instead of C<return> from inside an lvalue subroutine when
+you know that you're in RVALUE context. If you try to use a normal C<return>,
+you'll get a compile-time error in Perl 5.6.1 and above unless you return an
+lvalue.
+
+=item lnoreturn
+
+Use this function instead of C<return> from inside an lvalue subroutine when
+you're in ASSIGN context and you've used C<want('ASSIGN')> to carry out the
+appropriate action.
+
+If you use C<rreturn> or C<lnoreturn>, then you have to put a bare C<return;>
+at the very end of your lvalue subroutine, in order to stop the Perl compiler
+from complaining. Think of it as akin to the C<1;> that you have to put at the
+end of a module.
 
 =item howmany()
 
@@ -580,7 +620,7 @@ RVALUE
 
 =head1 EXPORT
 
-The C<want> function is exported by default.
+The C<want> and C<rreturn> functions are exported by default.
 The C<wantref> and/or C<howmany> functions can also be imported:
 
   use Want qw'want howmany';

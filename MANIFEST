@@ -8,4 +8,5 @@ Want.xs
 t/all.t
 t/assign.t
 t/boolean.t
+t/err.t
 t/object.t

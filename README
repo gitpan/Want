@@ -1,6 +1,10 @@
 -----------------------------------------------------------------------------
-| Want v0.04    - Robin Houston, 2001-08-04
+| Want v0.05    - Robin Houston, 2001-08-28
 -----------------------------------------------------------------------------
+
+Changes since v0.04:
+	- tests pass on 5.6.1 and above
+	- added 'rreturn' and 'lnoreturn' functions
 
 Changes since v0.03:
 	- 'want' is now exported by default
@@ -13,27 +17,9 @@ Changes since v0.03:
 	- specifiers can also now be space-separated, e.g.:
 		want('LVALUE ASSIGN');
 
-Changes since v0.02:
-	- Fix documentation snafus
-	- add want('COUNT') as a synonym for C<howmany>
-	  and want('REF') for C<wantref>
-	- BOOLEAN context
-	- now compiles & passes tests under ithreads
-	- SCALARREF and OBJECT reference contexts
-	  (want('REF') eq 'SCALAR' || want('REF') eq 'OBJECT')
-	- Reorganised test suite
-	
-
-Changes since v0.01:
-        - Give correct expectation count for constructs like
-                my ($x, $y, $z) = (23, foo());   # foo's expectation count is 2
-        - want(2) should be true in C<@x = foo()> etc;
-          i.e. infinity > N for any finite N  :-)
-        - Support '!' negative requests
-        - correct expectation count for slices
-
-
+For the full list of changes, see the Changes file.
 For full documentation, see the POD included with the module.
+
 Below is a brief extract of the documentation, to give you an
 idea of what this module does. It requires Perl version 5.6 or
 later.
@@ -47,22 +33,19 @@ SYNOPSIS
          sub foo :lvalue {
              if    (want(qw'LVALUE ASSIGN')) {
                print "We have been assigned ", want('ASSIGN');
-               return undef;
+               lnoreturn;
              }
              elsif (want('LIST')) {
-               return (1, 2, 3);
+               rreturn (1, 2, 3);
              }
              elsif (want('BOOL')) {
-               return 0;
+               rreturn 0;
              }
              elsif (want(qw'SCALAR !REF')) {
-               return 23;
+               rreturn 23;
              }
              elsif (want('HASH')) {
-               return { foo => 17, bar => 23 };
-             }
-             else {
-               return;
+               rreturn { foo => 17, bar => 23 };
              }
          }
 
