@@ -1,0 +1,72 @@
+-----------------------------------------------------------------------------
+| Want v0.01    - Robin Houston, 2001-07-15
+-----------------------------------------------------------------------------
+
+For full documentation, see the POD included with the module.
+Below is a brief extract of the documentation, to give you an
+idea of what this module does.
+
+
+NAME
+       Want - Implement the `want' command
+
+SYNOPSIS
+         use Want ('want');
+         sub foo :lvalue {
+             if    (want('lvalue')) {
+               return $x;
+             }
+             elsif (want->{LIST}) {
+               return (1, 2, 3);
+         }
+
+
+DESCRIPTION
+       This module generalises the mechanism of the wantarray
+       function, allowing a function to determine in some detail
+       how its return value is going to be immediately used.
+
+       ...
+
+EXAMPLES
+
+    use Carp 'croak';
+    use Want 'howmany';
+    sub numbers {
+        my $count = howmany();
+        croak("Can't make an infinite list") if !defined($count);
+        return (1..$count);
+    }
+    my ($one, $two, $three) = numbers();
+
+
+    use Want 'want';
+    sub pi () {
+        if    (want('ARRAY')) {
+            return [3, 1, 4, 1, 5, 9];
+        }
+        elsif (want('LIST')) {
+            return (3, 1, 4, 1, 5, 9);
+        }
+        else {
+            return 3;
+        }
+    }
+    print pi->[2];      # prints 4
+    print ((pi)[3]);    # prints 1
+
+
+AUTHOR
+       Robin Houston, <robin@kitsite.com>
+
+SEE ALSO
+       o   the wantarray entry in the perlfunc manpage
+
+       o   Perl6 RFC 21, by Damian Conway.
+           http://dev.perl.org/rfc/21.html
+
+COPYRIGHT
+       Copyright (c) 2001, Robin Houston. All Rights Reserved.
+       This module is free software. It may be used,
+       redistributed and/or modified under the same terms as Perl
+       itself.

@@ -1,0 +1,6 @@
+Revision history for Perl extension Want.
+
+0.01  Sun Jul  1 18:04:58 2001
+	- original version; created by h2xs 1.1.1.4 with options
+		-A Want
+
