@@ -27,7 +27,7 @@ dopoptosub_at(pTHX_ PERL_CONTEXT *cxstk, I32 startingblock)
         switch (CxTYPE(cx)) {
         default:
             continue;
-        //case CXt_EVAL:
+        /*case CXt_EVAL:*/
         case CXt_SUB:
         case CXt_FORMAT:
             DEBUG_l( Perl_deb(aTHX_ "(Found sub #%ld)\n", (long)i));
@@ -111,13 +111,35 @@ typedef struct {
 #define new_oplist			(oplist*) malloc(sizeof(oplist))
 #define init_oplist(l)			l->length = 0
 
+numop*
+lastnumop(oplist* l)
+{
+    U16 i = l->length;
+    numop* ret;
+    while (i-- > 0) {
+	ret = &(l->ops)[i];
+	if (ret->numop_op->op_type != OP_NULL && ret->numop_op->op_type != OP_SCOPE) {
+	    return ret;
+	}
+    }
+    return (numop*)0;
+}
+
+/* NB: unlike lastnumop, lastop frees the oplist */
 OP*
 lastop(oplist* l)
 {
-    OP* ret = (l->length ? (l->ops)[l->length-1].numop_op : Nullop);
+    U16 i = l->length;
+    OP* ret;
+    while (i-- > 0) {
+	ret = (l->ops)[i].numop_op;
+	if (ret->op_type != OP_NULL && ret->op_type != OP_SCOPE) {
+	    free(l);
+	    return ret;
+	}
+    }
     free(l);
-    
-    return ret;
+    return Nullop;
 }
 
 oplist*
@@ -149,9 +171,9 @@ find_ancestors_from(OP* start, OP* next, oplist* l)
     }
     else ll = l->length;
     
-    //printf("Looking for next: 0x%x\n", next);
+    /*printf("Looking for next: 0x%x\n", next);*/
     for (o = start; o; o = o->op_sibling, ++cn) {
-	//printf("(0x%x) %s -> 0x%x\n", o, PL_op_name[o->op_type], o->op_next);
+	/*printf("(0x%x) %s -> 0x%x\n", o, PL_op_name[o->op_type], o->op_next);*/
 
     	if (o->op_type == OP_ENTERSUB && o->op_next == next)
 	    return pushop(l, Nullop, cn);
@@ -159,9 +181,7 @@ find_ancestors_from(OP* start, OP* next, oplist* l)
 	if (o->op_flags & OPf_KIDS) {
 	    U16 ll = l->length;
 	
-	    if (o->op_type != OP_NULL && o->op_type != OP_SCOPE)
-		pushop(l, o, cn);
-
+	    pushop(l, o, cn);
 	    if (find_ancestors_from(cUNOPo->op_first, next, l))
 		return l;
 	    else
@@ -277,9 +297,9 @@ count_list (OP* parent, OP* returnop)
     if (! (parent->op_flags & OPf_KIDS))
 	return 0;
 	
-    //printf("count_list: returnop = 0x%x\n", returnop);
+    /*printf("count_list: returnop = 0x%x\n", returnop);*/
     for(o = cUNOPx(parent)->op_first; o; o=o->op_sibling) {
-	//printf("\t%-8s\t(0x%x)\n", PL_op_name[o->op_type], o->op_next);
+	/*printf("\t%-8s\t(0x%x)\n", PL_op_name[o->op_type], o->op_next);*/
 	if (returnop && o->op_type == OP_ENTERSUB && o->op_next == returnop)
 	    return i;
 	if (o->op_type == OP_RV2AV || o->op_type == OP_RV2HV || o->op_type == OP_ENTERSUB)
@@ -297,6 +317,64 @@ count_list (OP* parent, OP* returnop)
 
     return i;
 }
+
+I32
+countstack(I32 uplevel)
+{
+    PERL_CONTEXT* cx = upcontext(aTHX_ uplevel);
+    I32 oldmarksp;
+    I32 mark_from;
+    I32 mark_to;
+
+    if (!cx) return -1;
+
+    oldmarksp = cx->blk_oldmarksp;
+    mark_from = PL_markstack[oldmarksp];
+    mark_to   = PL_markstack[oldmarksp+1];
+    return (mark_to - mark_from);
+}
+
+AV*
+copy_rvals(I32 uplevel, I32 skip)
+{
+    PERL_CONTEXT* cx = upcontext(aTHX_ uplevel);
+    I32 oldmarksp;
+    I32 mark_from;
+    I32 mark_to;
+    U32 i;
+    AV* a;
+
+    oldmarksp = cx->blk_oldmarksp;
+    mark_from = PL_markstack[oldmarksp-1];
+    mark_to   = PL_markstack[oldmarksp];
+
+    /*printf("\t(%d -> %d) %d skipping %d\n", mark_from, mark_to, oldmarksp, skip);*/
+
+    if (!cx) return Nullav;
+    a = newAV();
+    for(i=mark_from+1; i<=mark_to; ++i)
+	if (skip-- <= 0) av_push(a, PL_stack_base[i]);
+    /* printf("avlen = %d\n", av_len(a)); */
+
+    return a;
+}
+
+AV*
+copy_rval(I32 uplevel)
+{
+    PERL_CONTEXT* cx = upcontext(aTHX_ uplevel);
+    I32 oldmarksp;
+    AV* a;
+
+    oldmarksp = cx->blk_oldmarksp;
+    if (!cx) return Nullav;
+    a = newAV();
+    /* printf("oldmarksp = %d\n", oldmarksp); */
+    av_push(a, PL_stack_base[PL_markstack[oldmarksp+1]]);
+
+    return a;
+}
+
 
 MODULE = Want		PACKAGE = Want		
 PROTOTYPES: ENABLE
@@ -332,7 +410,7 @@ I32 uplevel;
       RETVAL = 0;
     }
     else if (!CvLVALUE(cx->blk_sub.cv)) {
-      warn("Want: not an lvalue subroutine");
+      /* Not an lvalue subroutine */
       RETVAL = 0;
     }
     else
@@ -357,6 +435,7 @@ I32 uplevel;
   OUTPUT:
     RETVAL
 
+
 I32
 want_count(uplevel)
 I32 uplevel;
@@ -367,10 +446,10 @@ I32 uplevel;
   CODE:
     if (o && o->op_type == OP_AASSIGN) {
 	I32 lhs = count_list(cBINOPo->op_last,  Nullop  );
-	I32 rhs = count_list(cBINOPo->op_first, returnop);
+	I32 rhs = countstack(uplevel);
 	if      (lhs == 0) RETVAL = -1;		/* (..@x..) = (..., foo(), ...); */
-	else if (rhs == 0) RETVAL =  0;		/* (...) = (@x, foo()); */
-	else RETVAL = lhs - rhs;
+	else if (rhs >= lhs-1) RETVAL =  0;
+	else RETVAL = lhs - rhs - 1;
     }
 
     else switch(gimme) {
@@ -401,7 +480,7 @@ I32 uplevel;
       U16 n = l->ops[i].numop_num;
       bool v = (OP_GIMME(o, -1) == G_VOID);
 
-      //printf("%-8s %c %d\n", PL_op_name[o->op_type], (v ? 'v' : ' '), n);
+      /*printf("%-8s %c %d\n", PL_op_name[o->op_type], (v ? 'v' : ' '), n);*/
 
       switch(o->op_type) {
 	case OP_NOT:
@@ -426,7 +505,10 @@ I32 uplevel;
 	case OP_COND_EXPR:
 	  truebool = (truebool || n == 0);
 	  break;
-	  
+	
+	case OP_NULL:
+	  break;
+	    
 	default:
 	  truebool   = FALSE;
 	  pseudobool = FALSE;
@@ -434,5 +516,36 @@ I32 uplevel;
     }
     free(l);
     RETVAL = truebool || pseudobool;
+  OUTPUT:
+    RETVAL
+
+SV*
+want_assign(uplevel)
+U32 uplevel;
+  PREINIT:
+    AV* r;
+    oplist* os = ancestor_ops(uplevel, 0);
+    numop* lno = os ? lastnumop(os) : (numop*)0;
+    OPCODE type;
+  CODE:
+    if (lno) type = lno->numop_op->op_type;
+    if (lno && (type == OP_AASSIGN || type == OP_SASSIGN) && lno->numop_num == 1)
+      if (type == OP_AASSIGN) {
+        OP* returnop = PL_retstack[PL_retstack_ix - uplevel - 1];
+        I32 lhs_count = count_list(cBINOPx(lno->numop_op)->op_last,  returnop);
+        if (lhs_count == 0) r = newAV();
+        else {
+          r = copy_rvals(uplevel, lhs_count-1);
+        }
+      }
+      else r = copy_rval(uplevel);
+
+    else {
+      /* Not an assignment */
+      r = Nullav;
+    }
+    
+    RETVAL = r ? newRV_inc((SV*) r) : &PL_sv_undef;
+    if (os) free(os);
   OUTPUT:
     RETVAL

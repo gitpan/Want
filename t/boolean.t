@@ -16,7 +16,7 @@ sub wb {
 }
 
 # Notice that the low-level want_boolean() routine returns true even
-# in void context. want('BOOLEAN') is equivalent to (want_boolean && want('!VOID'))
+# in void context. want('BOOL') is equivalent to (want_boolean && want('!VOID'))
 wb(2, 1);
 
 $x = (wb(3, 1, 1) && wb(4, 0));
@@ -41,7 +41,7 @@ if ((wb(11,1,1) && wb(12,1,0)) || wb(13, 1)) {
 wb((wb(14,1,1) && wb(15,0,0)) || wb(16, 0, 17), 1);
 
 
-# Now check that want('BOOLEAN') is okay
+# Now check that want('BOOL') is okay
 
 sub wantt {
     my $t = shift();
@@ -50,12 +50,12 @@ sub wantt {
     $r
 }
 
- wantt(18, 0, 'SCALAR', 'BOOLEAN', '!REF') ||
-!wantt(19, 0, 'SCALAR', 'BOOLEAN', '!REF') || 1;
+ wantt(18, 0, 'SCALAR', 'BOOL', '!REF') ||
+!wantt(19, 0, 'SCALAR', 'BOOL', '!REF') || 1;
 
-wantt(20, 0, '!BOOLEAN');
-$x = wantt(21, 0, '!BOOLEAN');
-@x = wantt(22, 0, qw'LIST !BOOLEAN');
+wantt(20, 0, '!BOOL');
+$x = wantt(21, 0, '!BOOL');
+@x = wantt(22, 0, qw'LIST !BOOL');
 
-$x = (wantt(23, 0, 'BOOLEAN') xor wantt(24, 0, 'BOOLEAN'));
-$x = !(0 + wantt(25, 1, '!BOOLEAN'));
+$x = (wantt(23, 0, 'BOOL') xor wantt(24, 0, 'BOOL'));
+$x = !(0 + wantt(25, 1, '!BOOL'));

@@ -22,3 +22,14 @@ Revision history for Perl extension Want.
 	- SCALARREF and OBJECT reference contexts
 	  (want('REF') eq 'SCALAR' || want('REF') eq 'OBJECT')
 	- Reorganised test suite
+
+0.04  Sat Aug  4 09:44:34 BST 2001
+	- 'want' is now exported by default
+	- BOOL is a euphemism for BOOLEAN (Perl 6 compatibility)
+	- ARGUMENTS section added to documentation
+	- excised C++-style comments from the source
+	- fixed the expectation count issue from the BUGS section of 0.03
+	- ASSIGN context. Yeah, baby!
+	- don't throw an error if RVALUE/LVALUE are used from a non-lvalue sub
+	- specifiers can also now be space-separated, e.g.:
+		want('LVALUE ASSIGN');

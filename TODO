@@ -1,12 +1,7 @@
-- Split test suite out into separate files testing different bits.
-
-- Get expectation count right in
-    my @x = (1);
-    my ($x, $y) = (@x, foo());
-
-- Want::rvalues()
+- Improve the error handling (only warn once per call, anyway).
 
 - Benchmark & optimise if necessary
+  (i.e. don't get the cx multiple times)
 
 - See what happens from FETCH/STORE routines (eek!)
 

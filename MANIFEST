@@ -6,5 +6,6 @@ TODO
 Want.pm
 Want.xs
 t/all.t
+t/assign.t
 t/boolean.t
 t/object.t

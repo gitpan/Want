@@ -10,8 +10,9 @@ require DynaLoader;
 
 our @ISA = qw(Exporter DynaLoader);
 
+our @EXPORT = 'want';
 our @EXPORT_OK = qw(want howmany wantref);
-our $VERSION = '0.03';
+our $VERSION = '0.04';
 
 bootstrap Want $VERSION;
 
@@ -56,7 +57,7 @@ sub _wantone {
 	my $gimme = wantarray_up($uplevel);
 	return (defined($gimme) && 0 == $gimme);
     }
-    elsif ($arg eq 'BOOLEAN') {
+    elsif ($arg eq 'BOOL' || $arg eq 'BOOLEAN') {
 	return want_boolean($uplevel) && defined(wantarray_up($uplevel));
     }
     elsif ($arg eq 'LIST') {
@@ -64,6 +65,9 @@ sub _wantone {
     }
     elsif ($arg eq 'COUNT') {
 	croak("want: COUNT must be the *only* parameter");
+    }
+    elsif ($arg eq 'ASSIGN') {
+	return !!_wantassign($uplevel + 1);
     }
     else {
 	croak ("want: Unrecognised specifier $arg");
@@ -75,11 +79,12 @@ sub want {
     
     # Deal with special cases (for RFC21-consistency):
     if (1 == @args) {
-	goto &wantref if $args[0] eq 'REF';
-	goto &howmany if $args[0] eq 'COUNT';
+	goto &wantref    if $args[0] eq 'REF';
+	goto &howmany    if $args[0] eq 'COUNT';
+	goto &wantassign if $args[0] eq 'ASSIGN';
     }
         
-    for my $arg (@args) {
+    for my $arg (map split, @args) {
 	if ($arg =~ /^!(.*)/) {
 	    return 0 unless !_wantone(2, $1);
 	}
@@ -123,23 +128,50 @@ sub _wantref {
     }
 }
 
+sub wantassign () { @_=(1); goto &_wantassign }
+sub _wantassign {
+    my $uplevel = shift();
+    return unless want_lvalue($uplevel);
+    my $r = want_assign($uplevel);
+    if (want('BOOL')) {
+	return (defined($r) && 0 != $r);
+    }
+    else {
+	return $r ? (want('SCALAR') ? $r->[$#$r] : @$r) : ();
+    }
+}
+
 1;
 
 __END__
 
 =head1 NAME
 
-Want - Implement the C<want> command
+Want - A generalisation of C<wantarray>
 
 =head1 SYNOPSIS
 
   use Want ('want');
   sub foo :lvalue {
-      if    (want('lvalue')) {
-        return $x;
+      if    (want(qw'LVALUE ASSIGN')) {
+        print "We have been assigned ", want('ASSIGN');
+        return undef;
       }
       elsif (want('LIST')) {
         return (1, 2, 3);
+      }
+      elsif (want('BOOL')) {
+        return 0;
+      }
+      elsif (want(qw'SCALAR !REF')) {
+        return 23;
+      }
+      elsif (want('HASH')) {
+        return { foo => 17, bar => 23 };
+      }
+      else {
+        return;
+      }
   }
 
 =head1 DESCRIPTION
@@ -156,10 +188,11 @@ The three kinds of top-level context are well known:
 
 =item B<VOID>
 
-The return value is not being used in any way; the function call is an entire
-statement:
-
-  foo();
+The return value is not being used in any way. It could be an entire statement
+like C<foo();>, or the last component of a compound statement which is itself in
+void context, such as C<$test || foo();>n. Be warned that the last statement
+of a subroutine will be in whatever context the subroutine was called in, because
+the result is implicitly returned.
 
 =item B<SCALAR>
 
@@ -211,6 +244,9 @@ The caller is definitely not trying to assign to the result:
   my $x = foo();
   ...etc...
 
+If the sub is declared without the C<:lvalue> attribute, then it will
+I<always> be in RVALUE context.
+
 =item B<LVALUE>
 
 Either the caller is directly assigning to the result of the sub call:
@@ -234,16 +270,68 @@ or else the result of the function call is being used as part of the argument li
 for I<another> function call:
 
   bar(foo());	# Will *always* call foo in lvalue context,
+  		# (provided that foo is an C<:lvalue> sub)
   		# regardless of what bar actually does.
 
 The reason for this last case is that bar might be a sub which modifies its
-arguments. They're rare in contemporary Perl code, but still possible:
+arguments. They're rare in contemporary Perl code, but perfectly possible:
 
   sub bar {
     $_[0] = 23;
   }
 
+(This is really a throwback to Perl 4, which didn't support explicit references.)
+
 =back
+
+=head2 Assignment context:
+
+The commonest use of lvalue subroutines is with the assignment statement:
+
+  size() = 12;
+  (list()) = (1..10);
+
+A useful motto to remember when thinking about assignment statements is
+I<context comes from the left>. Consider code like this:
+
+  my ($x, $y, $z);
+  sub list () :lvalue { ($x, $y, $z) }
+  list = (1, 2, 3);
+  print "\$x = $x; \$y = $y; \$z = $z\n";
+
+This prints C<$x = ; $y = ; $z = 3>, which may not be what ypu were expecting.
+The reason is that the assignment is in scalar context, so the comma operator
+is in scalar context too, and discards all values but the last. You can fix
+it by writing C<(list) = (1,2,3);> instead.
+
+If your lvalue subroutine is used on the left of an assignment statement,
+it's in B<ASSIGN> context.  If ASSIGN is the only argument to C<want()>, then
+it returns a reference to an array of the value(s) of the right-hand side.
+This makes it very easy to write lvalue subroutines which do clever things:
+
+  use Want;
+  use strict;
+  sub backstr :lvalue {
+    if (want(qw'LVALUE ASSIGN')) {
+      my ($a) = want('ASSIGN');
+      $_[0] = reverse $a;
+      return undef;
+    }
+    elsif (want('RVALUE')) {
+      my $t = scalar reverse $_[0];
+    }
+    else {
+      carp("Not in ASSIGN context");
+    }
+  }
+ 
+  print "foo -> ", backstr("foo"), "\n";	# foo -> oof
+  backstr(my $robin) = "nibor";
+  print "\$robin is now $robin\n";		# $robin is now robin
+
+
+The only way to write that C<backstr> function without using Want is to return
+a tied variable which is tied to a custom class.
 
 =head2 Reference context:
 
@@ -266,6 +354,8 @@ if a reference is not expected.
 Because C<want('SCALAR')> is already used to select ordinary scalar context,
 you have to use C<want('REFSCALAR')> to find out if a SCALAR reference is
 expected. Or you could use C<want('REF') eq 'SCALAR'> of course.
+
+Be warned that C<want('ARRAY')> is a B<very> different thing from C<wantarray()>.
 
 =head2 Item count
 
@@ -307,7 +397,7 @@ return value:
     
     print (foo() ? "ok\n" : "not ok\n");
     
-In the following example, all subroutine calls are in BOOLEAN context:
+In the following example, all subroutine calls are in BOOL context:
 
     my $x = ( (foo() && !bar()) xor (baz() || quux()) );
 
@@ -345,6 +435,8 @@ several functions, and to conform to Damian Conway's suggestion in RFC 21.
 Finally, the keyword I<COUNT> can be used, provided that it's the only keyword
 you pass. Mixing COUNT with other keywords is an error. This is a synonym for the
 C<howmany> function.
+
+A full list of the permitted keyword is in the B<ARGUMENTS> section below.
 
 =item howmany()
 
@@ -392,53 +484,142 @@ The same as C<want('REF')>.
     print pi->[2];	# prints 4
     print ((pi)[3]);	# prints 1
 
+=head1 ARGUMENTS
+
+The permitted arguments to the C<want> function are listed below.
+The list is structured so that sub-contexts appear below the context that they
+are part of.
+
+=over 4
+
+=item *
+
+VOID
+
+=item *
+
+SCALAR
+
+=over 4
+
+=item *
+
+REF
+
+=over 4
+
+=item *
+
+REFSCALAR
+
+=item *
+
+CODE
+
+=item *
+
+HASH
+
+=item *
+
+ARRAY
+
+=item *
+
+GLOB
+
+=item *
+
+OBJECT
+
+=back
+
+=item *
+
+BOOL
+
+=back
+
+=item *
+
+LIST
+
+=over 4
+
+=item *
+
+COUNT
+
+=item *
+
+E<lt>numberE<gt>
+
+=item *
+
+Infinity
+
+=back
+
+=item *
+
+LVALUE
+
+=over 4
+
+=item *
+
+ASSIGN
+
+=back
+
+=item *
+
+RVALUE
+
+=back
+
 =head1 EXPORT
 
-None by default. The C<want>, C<wantref> and/or C<howmany> functions can be imported:
+The C<want> function is exported by default.
+The C<wantref> and/or C<howmany> functions can also be imported:
 
   use Want qw'want howmany';
 
 If you don't import these functions, you must qualify their names as (e.g.)
-C<Want::want>.
+C<Want::wantref>.
 
 =head1 INTERFACE
 
-This module is still under early development, and the public interface may change in
+This module is still under development, and the public interface may change in
 future versions. I can't yet make any guarantees about interface stability.
 
 I'd be interested to know how you're using this module.
 
 =head1 SUBTLETIES
 
-There are two different levels of B<BOOLEAN> context. I<Pure> boolean context
-occurs in conditional expressions, and the operands of the I<xor> and I<!>/I<not>
+There are two different levels of B<BOOL> context. I<Pure> boolean context
+occurs in conditional expressions, and the operands of the C<xor> and C<!>/C<not>
 operators.
-Pure boolean context also propagates down through the I<&&> and I<||> operators.
+Pure boolean context also propagates down through the C<&&> and C<||> operators.
 
 However, consider an expression like C<my $x = foo() && "yes">. The subroutine
 is called in I<pseudo>-boolean context - its return value isn't B<entirely>
 ignored, because the undefined value, the empty string and the integer 0 are
 all false.
 
-At the moment C<want('BOOLEAN')> is true in either pure or pseudo boolean
+At the moment C<want('BOOL')> is true in either pure or pseudo boolean
 context. Let me know if this is a problem.
 
 =head1 BUGS
 
-Expectation counts are determined as well as possible from examining the calling
-expression, without taking into account the actual values of variables. In
-particular, arrays are always assumed to be arbitrarily long; so if you have
-
-    my @x = (1);
-    my ($x, $y) = (@x, foo());
-
-then the expectation count for foo() is given as zero, even though one value
-will be used in this case. I hope this will be corrected in a future version,
-so don't rely on it.
+I've fixed all the bugs that I know about.
+Let me know about the bugs that you discover.
 
 =head1 AUTHOR
 
 Robin Houston, E<lt>robin@cpan.orgE<gt>
+
+Thanks to Damian Conway for encouragement and good suggestions.
 
 =head1 SEE ALSO
 
