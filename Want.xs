@@ -561,6 +561,6 @@ double_return()
         Perl_croak(aTHX_ "Can't return outside a subroutine");
 
     ourcx->cx_type = CXt_NULL;
-    pop_return();
+    Perl_pop_return(aTHX);
 
     return;

@@ -1,6 +1,6 @@
 package Want;
 
-require v5.6;
+require 5.006;
 use Carp 'croak';
 use strict;
 use warnings;
@@ -12,7 +12,7 @@ our @ISA = qw(Exporter DynaLoader);
 
 our @EXPORT = qw(want rreturn lnoreturn);
 our @EXPORT_OK = qw(want howmany wantref);
-our $VERSION = '0.05';
+our $VERSION = '0.06';
 
 bootstrap Want $VERSION;
 

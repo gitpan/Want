@@ -1,21 +1,14 @@
 -----------------------------------------------------------------------------
-| Want v0.05    - Robin Houston, 2001-08-28
+| Want v0.06    - Robin Houston, 2003-07-25
 -----------------------------------------------------------------------------
+
+Changes since v0.05:
+        - pass thread context to pop_return
+        - remove v-string
 
 Changes since v0.04:
 	- tests pass on 5.6.1 and above
 	- added 'rreturn' and 'lnoreturn' functions
-
-Changes since v0.03:
-	- 'want' is now exported by default
-	- BOOL is a euphemism for BOOLEAN (Perl 6 compatibility)
-	- ARGUMENTS section added to documentation
-	- excised C++-style comments from the source
-	- fixed the expectation count issue from the BUGS section of 0.03
-	- ASSIGN context. Yeah, baby!
-	- don't throw an error if RVALUE/LVALUE are used from a non-lvalue sub
-	- specifiers can also now be space-separated, e.g.:
-		want('LVALUE ASSIGN');
 
 For the full list of changes, see the Changes file.
 For full documentation, see the POD included with the module.

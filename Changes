@@ -37,3 +37,7 @@ Revision history for Perl extension Want.
 0.05  Tue Aug 28 22:14:48 BST 2001
 	- tests pass on 5.6.1 and above
 	- added 'rreturn' and 'lnoreturn' functions
+
+0.06  Fri Jul 25 11:42:13 BST 2003
+	- pass thread context to Perl_pop_return
+	- remove v-string
