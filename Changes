@@ -52,3 +52,11 @@ Revision history for Perl extension Want.
 0.08  Mon Dec 13 01:23:28 GMT 2004
 	- Accommodate the changed internals of perl 5.9.2
           (the retstack is no more: see change #23156).
+
+0.09  Thu Jun 30 15:02:37 BST 2005
+    - Fix a bug reported by Damian: want doesn't work (crashes) if
+      it's called from within the guard of a loop. See the comment
+      above upcontext_plus in Want.xs.
+    - Runs under the debugger!
+    - Give an error message (rather than segfaulting) if called from
+      a tie handler.

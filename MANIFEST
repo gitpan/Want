@@ -8,5 +8,7 @@ Want.xs
 t/all.t
 t/assign.t
 t/boolean.t
+t/damian.t
 t/err.t
 t/object.t
+META.yml                                 Module meta-data (added by MakeMaker)

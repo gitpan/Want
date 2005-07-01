@@ -2,6 +2,10 @@
 #include "perl.h"
 #include "XSUB.h"
 
+/* The most popular error message */
+#define TOO_FAR \
+  die("want: Called from outside a subroutine")
+
 /* Between 5.9.1 and 5.9.2 the retstack was removed, and the
    return op is now stored on the cxstack. */
 #define HAS_RETSTACK (\
@@ -83,8 +87,83 @@ upcontext(pTHX_ I32 count)
         dbcxix = dopoptosub_at(aTHX_ ccstack, cxix - 1);
         /* We expect that ccstack[dbcxix] is CXt_SUB, anyway, the
            field below is defined for any cx. */
-        if (PL_DBsub && dbcxix >= 0 && ccstack[dbcxix].blk_sub.cv == GvCV(PL_DBsub))
+        if (PL_DBsub && dbcxix >= 0 && ccstack[dbcxix].blk_sub.cv == GvCV(PL_DBsub)) {
             cx = &ccstack[dbcxix];
+        }
+    }
+    return cx;
+}
+
+/* This one is like upcontext except that, when it's found the
+   sub context, it keeps looking to see if the sub was called
+   from within a loop. If it was, it returns the loop context
+   instead.
+   
+   Prior to 0.09, find_ancestors_from was called with start equal
+   to the oldcop of the sub we're looking for. Unfortunately it's not
+   guaranteed that we'll be able to find the sub just by
+   traversing the tree from there: Damian Conway reported
+   a bug against 0.08, where code like  while(foo) {...}
+   -- where foo calls want -- causes a crash on the second
+   iteration of the loop. That is because oldcop then
+   points to the last cop in the body of the loop, which
+   is lexically *ahead* of the calling point.
+*/
+PERL_CONTEXT*
+upcontext_plus(pTHX_ I32 count)
+{
+    PERL_SI *top_si = PL_curstackinfo;
+    I32 cxix = dopoptosub(aTHX_ cxstack_ix);
+    PERL_CONTEXT *cx, *tcx;
+    PERL_CONTEXT *ccstack = cxstack;
+    I32 dbcxix, i;
+    bool debugger_trouble;
+
+    for (;;) {
+        /* we may be in a higher stacklevel, so dig down deeper */
+        while (cxix < 0 && top_si->si_type != PERLSI_MAIN) {
+            top_si = top_si->si_prev;
+            ccstack = top_si->si_cxstack;
+            cxix = dopoptosub_at(aTHX_ ccstack, top_si->si_cxix);
+        }
+        if (cxix < 0) {
+            return (PERL_CONTEXT *)0;
+        }
+        if (PL_DBsub && cxix >= 0 &&
+                ccstack[cxix].blk_sub.cv == GvCV(PL_DBsub))
+            count++;
+        if (!count--)
+            break;
+        cxix = dopoptosub_at(aTHX_ ccstack, cxix - 1);
+    }
+    cx = &ccstack[cxix];
+    if (CxTYPE(cx) == CXt_SUB || CxTYPE(cx) == CXt_FORMAT) {
+        dbcxix = dopoptosub_at(aTHX_ ccstack, cxix - 1);
+        /* We expect that ccstack[dbcxix] is CXt_SUB, anyway, the
+           field below is defined for any cx. */
+        if (PL_DBsub && dbcxix >= 0 && ccstack[dbcxix].blk_sub.cv == GvCV(PL_DBsub))
+        {
+            cxix = dbcxix;
+            cx = &ccstack[cxix];
+        }
+    }
+
+    /* Now for the extra bit */
+    debugger_trouble = (cx->blk_oldcop->op_type == OP_DBSTATE);
+
+    for (i = cxix-1; i>=0 ; i--) {
+        tcx = &ccstack[i];
+        switch (CxTYPE(tcx)) {
+        case CXt_BLOCK:
+            if (debugger_trouble && i > 0) return tcx;
+        default:
+            continue;
+        case CXt_LOOP:
+            return tcx;
+        case CXt_SUB:
+        case CXt_FORMAT:
+            return cx;
+        }
     }
     return cx;
 }
@@ -95,10 +174,7 @@ U8
 want_gimme (I32 uplevel)
 {
     PERL_CONTEXT* cx = upcontext(aTHX_ uplevel);
-    if (!cx) {
-	warn("want_scalar: gone too far up the stack");
-	return 0;
-    }
+    if (!cx) TOO_FAR;
     return cx->blk_gimme;
 }
 
@@ -115,20 +191,22 @@ typedef struct {
     numop  ops[OPLIST_MAX];
 } oplist;
 
-#define find_parent_from(start, next)	lastop(find_ancestors_from(start, next, 0))
-#define new_oplist			(oplist*) malloc(sizeof(oplist))
-#define init_oplist(l)			l->length = 0
+#define new_oplist                      (oplist*) malloc(sizeof(oplist))
+#define init_oplist(l)                  l->length = 0
 
 numop*
 lastnumop(oplist* l)
 {
-    U16 i = l->length;
+    U16 i;
     numop* ret;
+
+    if (!l) die("Want panicked: null list in lastnumop");
+    i = l->length;
     while (i-- > 0) {
-	ret = &(l->ops)[i];
-	if (ret->numop_op->op_type != OP_NULL && ret->numop_op->op_type != OP_SCOPE) {
-	    return ret;
-	}
+        ret = &(l->ops)[i];
+        if (ret->numop_op->op_type != OP_NULL && ret->numop_op->op_type != OP_SCOPE) {
+            return ret;
+        }
     }
     return (numop*)0;
 }
@@ -137,14 +215,19 @@ lastnumop(oplist* l)
 OP*
 lastop(oplist* l)
 {
-    U16 i = l->length;
+    U16 i;
     OP* ret;
+
+    if (!l) die("Want panicked: null list in lastop");
+    i  = l->length;
     while (i-- > 0) {
-	ret = (l->ops)[i].numop_op;
-	if (ret->op_type != OP_NULL && ret->op_type != OP_SCOPE) {
-	    free(l);
-	    return ret;
-	}
+        ret = (l->ops)[i].numop_op;
+        if (ret->op_type != OP_NULL
+            && ret->op_type != OP_SCOPE
+            && ret->op_type != OP_LEAVE) {
+            free(l);
+            return ret;
+        }
     }
     free(l);
     return Nullop;
@@ -155,12 +238,12 @@ pushop(oplist* l, OP* o, U16 i)
 {
     I16 len = l->length;
     if (o) {
-	++ l->length;
-	l->ops[len].numop_op  = o;
-	l->ops[len].numop_num = -1;
+        ++ l->length;
+        l->ops[len].numop_op  = o;
+        l->ops[len].numop_num = -1;
     }
     if (len > 0)
-	l->ops[len-1].numop_num = i;
+        l->ops[len-1].numop_num = i;
 
     return l;
 }
@@ -168,71 +251,62 @@ pushop(oplist* l, OP* o, U16 i)
 oplist*
 find_ancestors_from(OP* start, OP* next, oplist* l)
 {
-    OP     *o;
+    OP     *o, *p;
     U16    cn = 0;
     U16    ll;
+    bool outer_call = FALSE;
+
+    if (!next)
+        die("want panicked: I've been asked to find a null return address.\n"
+		"  (Are you trying to call me from inside a tie handler?)\n ");
     
     if (!l) {
-	l = new_oplist;
-	init_oplist(l);
-	ll = 0;
+        outer_call = TRUE;
+        l = new_oplist;
+        init_oplist(l);
+        ll = 0;
     }
     else ll = l->length;
-    
-    /*printf("Looking for next: 0x%x\n", next);*/
-    for (o = start; o; o = o->op_sibling, ++cn) {
-	/*printf("(0x%x) %s -> 0x%x\n", o, PL_op_name[o->op_type], o->op_next);*/
+   
+    /*printf("Looking for 0x%x starting at 0x%x\n", next, start);*/
+    for (o = start; o; p = o, o = o->op_sibling, ++cn) {
+        /*printf("(0x%x) %s -> 0x%x\n", o, PL_op_name[o->op_type], o->op_next);*/
 
-    	if (o->op_type == OP_ENTERSUB && o->op_next == next)
-	    return pushop(l, Nullop, cn);
+        if (o->op_type == OP_ENTERSUB && o->op_next == next)
+            return pushop(l, Nullop, cn);
 
-	if (o->op_flags & OPf_KIDS) {
-	    U16 ll = l->length;
-	
-	    pushop(l, o, cn);
-	    if (find_ancestors_from(cUNOPo->op_first, next, l))
-		return l;
-	    else
-		l->length = ll;
-	}
+        if (o->op_flags & OPf_KIDS) {
+            U16 ll = l->length;
+        
+            pushop(l, o, cn);
+            if (find_ancestors_from(cUNOPo->op_first, next, l))
+                return l;
+            else
+                l->length = ll;
+        }
 
     }
     return 0;
 }
 
-/** Return the parent of the OP_ENTERSUB, or the grandparent if the parent
- *  is an OP_NULL or OP_SCOPE. If the parent precedes the last COP, then return Nullop.
- *  (In that last case, we must be in void context.)
- */
 OP*
-parent_op (I32 uplevel, OP** return_op_out)
+find_return_op(pTHX_ I32 uplevel)
 {
-    OP* return_op = Nullop;
-    PERL_CONTEXT* cx = upcontext(aTHX_ uplevel);
-    COP* prev_cop;
-    
-    if (!cx) {
-	warn("want_scalar: gone too far up the context stack");
-	return 0;
-    }
+    PERL_CONTEXT *cx = upcontext(aTHX_ uplevel);
+    if (!cx) TOO_FAR;
 #if HAS_RETSTACK
-    if (uplevel > PL_retstack_ix) {
-	warn("want_scalar: gone too far up the return stack");
-	return 0;
-    }
-#endif
-    
-#if HAS_RETSTACK
-    return_op = PL_retstack[PL_retstack_ix - uplevel - 1];
+    return PL_retstack[cx->blk_oldretsp - 1];
 #else
-    return_op = cx->blk_sub.retop;
+    return cx->blk_sub.retop;
 #endif
-    prev_cop = cx->blk_oldcop;
-    
-    if (return_op_out)
-	*return_op_out = return_op;
+}
 
-    return find_parent_from((OP*)prev_cop, return_op);
+OP*
+find_start_cop(pTHX_ I32 uplevel)
+{
+    PERL_CONTEXT* cx = upcontext_plus(aTHX_ uplevel);
+    if (!cx) TOO_FAR;
+    return (OP*) cx->blk_oldcop;
 }
 
 /**
@@ -242,34 +316,24 @@ parent_op (I32 uplevel, OP** return_op_out)
 oplist*
 ancestor_ops (I32 uplevel, OP** return_op_out)
 {
-    OP* return_op = Nullop;
-    PERL_CONTEXT* cx = upcontext(aTHX_ uplevel);
-    COP* prev_cop;
-    
-    if (!cx) {
-	warn("want_scalar: gone too far up the context stack");
-	return 0;
-    }
-#if HAS_RETSTACK
-    if (uplevel > PL_retstack_ix) {
-	warn("want_scalar: gone too far up the return stack");
-	return 0;
-    }
-#endif
-    
-#if HAS_RETSTACK
-    return_op = PL_retstack[PL_retstack_ix - uplevel - 1];
-#else
-    return_op = cx->blk_sub.retop;
-#endif
-    prev_cop = cx->blk_oldcop;
+    OP* return_op = find_return_op(aTHX_ uplevel);
+    OP* start_cop = find_start_cop(aTHX_ uplevel);
     
     if (return_op_out)
-	*return_op_out = return_op;
+        *return_op_out = return_op;
 
-    return find_ancestors_from((OP*)prev_cop, return_op, 0);
+    return find_ancestors_from(start_cop, return_op, 0);
 }
 
+/** Return the parent of the OP_ENTERSUB, or the grandparent if the parent
+ *  is an OP_NULL or OP_SCOPE. If the parent precedes the last COP, then return Nullop.
+ *  (In that last case, we must be in void context.)
+ */
+OP*
+parent_op (I32 uplevel, OP** return_op_out)
+{
+    return lastop(ancestor_ops(uplevel, return_op_out));
+}
 
 /* forward declaration - mutual recursion */
 I32 count_list (OP* parent, OP* returnop);
@@ -279,27 +343,27 @@ I32 count_slice (OP* o) {
     OP* l  = Nullop;
     
     if (pm->op_type != OP_PUSHMARK)
-	die("%s", "Want panicked: slice doesn't start with pushmark\n");
-	
+        die("%s", "Want panicked: slice doesn't start with pushmark\n");
+        
     if ( (l = pm->op_sibling) && (l->op_type == OP_LIST))
-	return count_list(l, Nullop);
+        return count_list(l, Nullop);
 
     else if (l)
-	switch (l->op_type) {
-	case OP_RV2AV:
-	case OP_RV2HV:
-	    return 0;
-	case OP_HSLICE:
-	case OP_ASLICE:
-	    return count_slice(l);
-	case OP_STUB:
-	    return 1;
-	default:
-	    die("Want panicked: Unexpected op in slice (%s)\n", PL_op_name[l->op_type]);
-	}
-	
+        switch (l->op_type) {
+        case OP_RV2AV:
+        case OP_RV2HV:
+            return 0;
+        case OP_HSLICE:
+        case OP_ASLICE:
+            return count_slice(l);
+        case OP_STUB:
+            return 1;
+        default:
+            die("Want panicked: Unexpected op in slice (%s)\n", PL_op_name[l->op_type]);
+        }
+        
     else
-	die("Want panicked: Nothing follows pushmark in slice\n");
+        die("Want panicked: Nothing follows pushmark in slice\n");
 
     return -999;  /* Should never get here - silence compiler warning */
 }
@@ -315,24 +379,24 @@ count_list (OP* parent, OP* returnop)
     I32 i = 0;
     
     if (! (parent->op_flags & OPf_KIDS))
-	return 0;
-	
+        return 0;
+        
     /*printf("count_list: returnop = 0x%x\n", returnop);*/
     for(o = cUNOPx(parent)->op_first; o; o=o->op_sibling) {
-	/*printf("\t%-8s\t(0x%x)\n", PL_op_name[o->op_type], o->op_next);*/
-	if (returnop && o->op_type == OP_ENTERSUB && o->op_next == returnop)
-	    return i;
-	if (o->op_type == OP_RV2AV || o->op_type == OP_RV2HV || o->op_type == OP_ENTERSUB)
-	    return 0;
-	
-	if (o->op_type == OP_HSLICE || o->op_type == OP_ASLICE) {
-	    I32 slice_length = count_slice(o);
-	    if (slice_length == 0)
-		return 0;
-	    else
-		i += slice_length - 1;
-	}
-	else ++i;
+        /*printf("\t%-8s\t(0x%x)\n", PL_op_name[o->op_type], o->op_next);*/
+        if (returnop && o->op_type == OP_ENTERSUB && o->op_next == returnop)
+            return i;
+        if (o->op_type == OP_RV2AV || o->op_type == OP_RV2HV || o->op_type == OP_ENTERSUB)
+            return 0;
+        
+        if (o->op_type == OP_HSLICE || o->op_type == OP_ASLICE) {
+            I32 slice_length = count_slice(o);
+            if (slice_length == 0)
+                return 0;
+            else
+                i += slice_length - 1;
+        }
+        else ++i;
     }
 
     return i;
@@ -373,7 +437,7 @@ copy_rvals(I32 uplevel, I32 skip)
     if (!cx) return Nullav;
     a = newAV();
     for(i=mark_from+1; i<=mark_to; ++i)
-	if (skip-- <= 0) av_push(a, PL_stack_base[i]);
+        if (skip-- <= 0) av_push(a, PL_stack_base[i]);
     /* printf("avlen = %d\n", av_len(a)); */
 
     return a;
@@ -396,7 +460,7 @@ copy_rval(I32 uplevel)
 }
 
 
-MODULE = Want		PACKAGE = Want		
+MODULE = Want           PACKAGE = Want          
 PROTOTYPES: ENABLE
 
 SV*
@@ -425,16 +489,9 @@ I32 uplevel;
     PERL_CONTEXT* cx;
   CODE:
     cx = upcontext(aTHX_ uplevel);
-    if (!cx) {
-      warn("Want::want_lvalue: gone too far up the stack");
-      RETVAL = 0;
-    }
-    else if (!CvLVALUE(cx->blk_sub.cv)) {
-      /* Not an lvalue subroutine */
-      RETVAL = 0;
-    }
-    else
-      RETVAL = cx->blk_sub.lval;
+    if (!cx) TOO_FAR;
+
+    RETVAL = cx->blk_sub.lval;
   OUTPUT:
     RETVAL
 
@@ -450,8 +507,9 @@ I32 uplevel;
     if (o && o->op_type == OP_ENTERSUB && (first = cUNOPo->op_first)
           && (second = first->op_sibling) && second->op_sibling != Nullop)
       RETVAL = "method_call";
-    else
+    else {
       RETVAL = o ? PL_op_name[o->op_type] : "(none)";
+    }
   OUTPUT:
     RETVAL
 
@@ -465,24 +523,24 @@ I32 uplevel;
     U8 gimme = want_gimme(uplevel);
   CODE:
     if (o && o->op_type == OP_AASSIGN) {
-	I32 lhs = count_list(cBINOPo->op_last,  Nullop  );
-	I32 rhs = countstack(uplevel);
-	if      (lhs == 0) RETVAL = -1;		/* (..@x..) = (..., foo(), ...); */
-	else if (rhs >= lhs-1) RETVAL =  0;
-	else RETVAL = lhs - rhs - 1;
+        I32 lhs = count_list(cBINOPo->op_last,  Nullop  );
+        I32 rhs = countstack(uplevel);
+        if      (lhs == 0) RETVAL = -1;         /* (..@x..) = (..., foo(), ...); */
+        else if (rhs >= lhs-1) RETVAL =  0;
+        else RETVAL = lhs - rhs - 1;
     }
 
     else switch(gimme) {
       case G_ARRAY:
-	RETVAL = -1;
-	break;
+        RETVAL = -1;
+        break;
 
       case G_SCALAR:
-	RETVAL = 1;
-	break;
+        RETVAL = 1;
+        break;
 
       default:
-	RETVAL = 0;
+        RETVAL = 0;
     }
   OUTPUT:
     RETVAL
@@ -503,35 +561,35 @@ I32 uplevel;
       /*printf("%-8s %c %d\n", PL_op_name[o->op_type], (v ? 'v' : ' '), n);*/
 
       switch(o->op_type) {
-	case OP_NOT:
-	case OP_XOR:
-	  truebool = TRUE;
-	  break;
-	  
-	case OP_AND:
-	  if (truebool || v)
-	    truebool = TRUE;
-	  else
-	    pseudobool = (pseudobool || n == 0);
-	  break;
-	  
-	case OP_OR:
-	  if (truebool || v)
-	    truebool = TRUE;
-	  else
-	    truebool = FALSE;
-	  break;
+        case OP_NOT:
+        case OP_XOR:
+          truebool = TRUE;
+          break;
+          
+        case OP_AND:
+          if (truebool || v)
+            truebool = TRUE;
+          else
+            pseudobool = (pseudobool || n == 0);
+          break;
+          
+        case OP_OR:
+          if (truebool || v)
+            truebool = TRUE;
+          else
+            truebool = FALSE;
+          break;
 
-	case OP_COND_EXPR:
-	  truebool = (truebool || n == 0);
-	  break;
-	
-	case OP_NULL:
-	  break;
-	    
-	default:
-	  truebool   = FALSE;
-	  pseudobool = FALSE;
+        case OP_COND_EXPR:
+          truebool = (truebool || n == 0);
+          break;
+        
+        case OP_NULL:
+          break;
+            
+        default:
+          truebool   = FALSE;
+          pseudobool = FALSE;
       }
     }
     free(l);

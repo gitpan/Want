@@ -12,7 +12,7 @@ our @ISA = qw(Exporter DynaLoader);
 
 our @EXPORT = qw(want rreturn lnoreturn);
 our @EXPORT_OK = qw(howmany wantref);
-our $VERSION = '0.08';
+our $VERSION = '0.09';
 
 bootstrap Want $VERSION;
 
@@ -636,7 +636,7 @@ C<Want::wantref>.
 =head1 INTERFACE
 
 This module is still under development, and the public interface may change in
-future versions. I can't yet make any guarantees about interface stability.
+future versions. The C<want> function can now be regarded as stable.
 
 I'd be interested to know how you're using this module.
 
@@ -657,7 +657,8 @@ context. Let me know if this is a problem.
 
 =head1 BUGS
 
-Doesn't work from inside a tie-handler.
+ * Doesn't work from inside a tie-handler.
+ * Doesn't work properly when the Perl debugger is operational.
 
 =head1 AUTHOR
 
