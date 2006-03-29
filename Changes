@@ -60,3 +60,9 @@ Revision history for Perl extension Want.
     - Runs under the debugger!
     - Give an error message (rather than segfaulting) if called from
       a tie handler.
+
+0.10  Sat Mar 25 15:00:41 GMT 2006
+    - Make context propagate through subroutine return
+    - Fix bug whereby want('LVALUE') sometimes gave false positives
+      (see test 58 in t/all.t)
+    - Fix bug whereby want_boolean often gave false positives

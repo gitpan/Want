@@ -1,5 +1,5 @@
 -----------------------------------------------------------------------------
-| Want v0.09    - Robin Houston, 2005-06-30
+| Want v0.10    - Robin Houston, 2006-03-25
 -----------------------------------------------------------------------------
 
 For full documentation, see the POD included with the module.
@@ -101,7 +101,6 @@ SEE ALSO
            http://dev.perl.org/rfc/21.html
 
 COPYRIGHT
-       Copyright (c) 2001, Robin Houston. All Rights Reserved.
-       This module is free software. It may be used,
-       redistributed and/or modified under the same terms as Perl
-       itself.
+       Copyright (c) 2001-2006, Robin Houston. All Rights Reserved.
+       This module is free software. It may be used, redistributed
+       and/or modified under the same terms as Perl itself.

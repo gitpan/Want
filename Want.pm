@@ -12,7 +12,7 @@ our @ISA = qw(Exporter DynaLoader);
 
 our @EXPORT = qw(want rreturn lnoreturn);
 our @EXPORT_OK = qw(howmany wantref);
-our $VERSION = '0.09';
+our $VERSION = '0.10';
 
 bootstrap Want $VERSION;
 
@@ -27,7 +27,7 @@ my %reftype = (
 sub _wantone {
     my ($uplevel, $arg) = @_;
     
-    my $wantref = _wantref($uplevel + 1);
+    my $wantref = wantref($uplevel + 1);
     if	  ($arg =~ /^\d+$/) {
 	my $want_count = want_count($uplevel);
 	return ($want_count == -1 || $want_count >= $arg);
@@ -58,7 +58,7 @@ sub _wantone {
 	return (defined($gimme) && 0 == $gimme);
     }
     elsif ($arg eq 'BOOL' || $arg eq 'BOOLEAN') {
-	return want_boolean($uplevel) && defined(wantarray_up($uplevel));
+	return want_boolean(bump_level($uplevel));
     }
     elsif ($arg eq 'LIST') {
 	return wantarray_up($uplevel);
@@ -67,7 +67,7 @@ sub _wantone {
 	croak("want: COUNT must be the *only* parameter");
     }
     elsif ($arg eq 'ASSIGN') {
-	return !!_wantassign($uplevel + 1);
+	return !!wantassign($uplevel + 1);
     }
     else {
 	croak ("want: Unrecognised specifier $arg");
@@ -75,21 +75,46 @@ sub _wantone {
 }
 
 sub want {
-    my @args = @_;
-    
+    if (@_ == 1 && $_[0] eq 'ASSIGN') {
+	@_ = (1);
+	goto &wantassign;
+    }
+    want_uplevel(1, @_);
+}
+
+# Simulate the propagation of context through a return value.
+sub bump_level {
+    my ($level) = @_;
+    for(;;) {
+	my ($p, $r) = parent_op_name($level+1);
+	if ($p eq "return"
+        or  $p eq "(none)" && $r =~ /^leavesub(lv)?$/)
+	{
+	    ++$level
+	}
+	else {
+	    return $level
+	}
+    }
+}
+
+sub want_uplevel {
+    my ($level, @args) = @_;
+
     # Deal with special cases (for RFC21-consistency):
     if (1 == @args) {
+	@_ = (1 + $level);
 	goto &wantref    if $args[0] eq 'REF';
 	goto &howmany    if $args[0] eq 'COUNT';
 	goto &wantassign if $args[0] eq 'ASSIGN';
     }
-        
+
     for my $arg (map split, @args) {
 	if ($arg =~ /^!(.*)/) {
-	    return 0 unless !_wantone(2, $1);
+	    return 0 unless !_wantone(2 + $level, $1);
 	}
 	else {
-	    return 0 unless _wantone(2, $arg);
+	    return 0 unless _wantone(2 + $level, $arg);
 	}
     }
     
@@ -97,14 +122,13 @@ sub want {
 }
 
 sub howmany () {
-    my $count = want_count(1);
+    my $level = bump_level(@_, 1);
+    my $count = want_count($level);
     return ($count < 0 ? undef : $count);
 }
 
-sub wantref () { @_ = (1); goto &_wantref }
-
-sub _wantref {
-    my $n = parent_op_name(shift());
+sub wantref {
+    my $n = parent_op_name(bump_level(@_, 1));
     if    ($n eq 'rv2av') {
 	return "ARRAY";
     }
@@ -128,11 +152,10 @@ sub _wantref {
     }
 }
 
-sub wantassign () { @_=(1); goto &_wantassign }
-sub _wantassign {
+sub wantassign {
     my $uplevel = shift();
     return unless want_lvalue($uplevel);
-    my $r = want_assign($uplevel);
+    my $r = want_assign(bump_level($uplevel));
     if (want('BOOL')) {
 	return (defined($r) && 0 != $r);
     }
@@ -156,6 +179,10 @@ sub lnoreturn () {
     double_return();
     return undef;
 }
+
+# Some naughty people were relying on these internal methods.
+*_wantref = \&wantref;
+*_wantassign = \&wantassign;
 
 1;
 
@@ -658,7 +685,6 @@ context. Let me know if this is a problem.
 =head1 BUGS
 
  * Doesn't work from inside a tie-handler.
- * Doesn't work properly when the Perl debugger is operational.
 
 =head1 AUTHOR
 
@@ -683,7 +709,7 @@ http://dev.perl.org/rfc/21.html
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001-2003, Robin Houston. All Rights Reserved.
+Copyright (c) 2001-2006, Robin Houston. All Rights Reserved.
 This module is free software. It may be used, redistributed
 and/or modified under the same terms as Perl itself.
 

@@ -4,7 +4,7 @@
 
 /* The most popular error message */
 #define TOO_FAR \
-  die("want: Called from outside a subroutine")
+  croak("want: Called from outside a subroutine")
 
 /* Between 5.9.1 and 5.9.2 the retstack was removed, and the
    return op is now stored on the cxstack. */
@@ -490,8 +490,11 @@ I32 uplevel;
   CODE:
     cx = upcontext(aTHX_ uplevel);
     if (!cx) TOO_FAR;
-
-    RETVAL = cx->blk_sub.lval;
+    
+    if (CvLVALUE(cx->blk_sub.cv))
+	RETVAL = cx->blk_sub.lval;
+    else
+	RETVAL = 0;
   OUTPUT:
     RETVAL
 
@@ -500,18 +503,27 @@ char*
 parent_op_name(uplevel)
 I32 uplevel;
   PREINIT:
-    OP* o = parent_op(uplevel, 0);
+    OP *r;
+    OP *o = parent_op(uplevel, &r);
     OP *first, *second;
-  CODE:
+    char *retval;
+  PPCODE:
     /* This is a bit of a cheat, admittedly... */
     if (o && o->op_type == OP_ENTERSUB && (first = cUNOPo->op_first)
           && (second = first->op_sibling) && second->op_sibling != Nullop)
-      RETVAL = "method_call";
+      retval = "method_call";
     else {
-      RETVAL = o ? PL_op_name[o->op_type] : "(none)";
+      retval = o ? PL_op_name[o->op_type] : "(none)";
     }
-  OUTPUT:
-    RETVAL
+    if (GIMME == G_ARRAY) {
+	EXTEND(SP, 1);
+	PUSHs(sv_2mortal(newSVpv(retval, 0)));
+	PUSHs(sv_2mortal(newSVpv(PL_op_name[r->op_type], 0)));
+    }
+    else {
+	EXTEND(SP, 1);
+	PUSHs(sv_2mortal(newSVpv(retval, 0)));
+    }
 
 
 I32
@@ -551,14 +563,14 @@ I32 uplevel;
   PREINIT:
     oplist* l = ancestor_ops(uplevel, 0);
     U16 i;
-    bool truebool = TRUE, pseudobool = FALSE;
+    bool truebool = FALSE, pseudobool = FALSE;
   CODE:
     for(i=0; i < l->length; ++i) {
       OP* o = l->ops[i].numop_op;
       U16 n = l->ops[i].numop_num;
       bool v = (OP_GIMME(o, -1) == G_VOID);
 
-      /*printf("%-8s %c %d\n", PL_op_name[o->op_type], (v ? 'v' : ' '), n);*/
+      /* printf("%-8s %c %d\n", PL_op_name[o->op_type], (v ? 'v' : ' '), n); */
 
       switch(o->op_type) {
         case OP_NOT:

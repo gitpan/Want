@@ -1,4 +1,4 @@
-BEGIN { $| = 1; print "1..57\n"; }
+BEGIN { $| = 1; print "1..58\n"; }
 
 # Test that we can load the module
 END {print "not ok 1\n" unless $loaded;}
@@ -186,3 +186,9 @@ sub tREF {
 }
 
 $x = ${tREF(57, 'SCALAR')};
+
+sub not_lvaluable {
+    print (want("LVALUE") ? "not ok 58\n" : "ok 58\n");
+}
+
+sub{}->(not_lvaluable());

@@ -15,9 +15,9 @@ sub wb {
   return $r;
 }
 
-# Notice that the low-level want_boolean() routine returns true even
-# in void context. want('BOOL') is equivalent to (want_boolean && want('!VOID'))
-wb(2, 1);
+# In older (< 0.10) versions of Want, want_boolean would return true
+# even in void context. That's no longer true.
+wb(2, 0);
 
 $x = (wb(3, 1, 1) && wb(4, 0));
 if (wb(5, 1)) {}
@@ -38,7 +38,7 @@ if ((wb(11,1,1) && wb(12,1,0)) || wb(13, 1)) {
   ()= $x
 }
 
-wb((wb(14,1,1) && wb(15,0,0)) || wb(16, 0, 17), 1);
+wb((wb(14,1,1) && wb(15,0,0)) || wb(16, 0, 17), 0);
 
 
 # Now check that want('BOOL') is okay
