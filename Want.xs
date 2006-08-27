@@ -237,7 +237,7 @@ oplist*
 pushop(oplist* l, OP* o, U16 i)
 {
     I16 len = l->length;
-    if (o) {
+    if (o && len < OPLIST_MAX) {
         ++ l->length;
         l->ops[len].numop_op  = o;
         l->ops[len].numop_num = -1;
@@ -651,6 +651,7 @@ double_return()
         Perl_croak(aTHX_ "Can't return outside a subroutine");
 
     ourcx->cx_type = CXt_NULL;
+    CvDEPTH(ourcx->blk_sub.cv)--;
 #if HAS_RETSTACK
     if (PL_retstack_ix > 0)
         --PL_retstack_ix;

@@ -66,3 +66,7 @@ Revision history for Perl extension Want.
     - Fix bug whereby want('LVALUE') sometimes gave false positives
       (see test 58 in t/all.t)
     - Fix bug whereby want_boolean often gave false positives
+
+0.11  Sat Aug 26 22:36:27 BST 2006
+    - (Jerry D. Hedden) Fix bug whereby 'lnoreturn' failed to
+      decrement the CvDEPTH, which causes an error with 'use threads'
