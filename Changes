@@ -70,3 +70,7 @@ Revision history for Perl extension Want.
 0.11  Sat Aug 26 22:36:27 BST 2006
     - (Jerry D. Hedden) Fix bug whereby 'lnoreturn' failed to
       decrement the CvDEPTH, which causes an error with 'use threads'
+
+0.12  Tue Aug 29 21:06:40 BST 2006
+    - (Jerry D. Hedden) Force the threads test to be skipped if oldstyle
+      threads (as opposed to ithreads) are in use.
