@@ -74,3 +74,6 @@ Revision history for Perl extension Want.
 0.12  Tue Aug 29 21:06:40 BST 2006
     - (Jerry D. Hedden) Force the threads test to be skipped if oldstyle
       threads (as opposed to ithreads) are in use.
+
+0.13  Tue May  1 21:39:19 BST 2007
+    - Address bug #26847, and add t/methcall.t

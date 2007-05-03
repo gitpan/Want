@@ -10,6 +10,7 @@ t/assign.t
 t/boolean.t
 t/damian.t
 t/err.t
+t/methcall.t
 t/object.t
 t/threads.p
 t/threads.t

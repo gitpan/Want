@@ -108,9 +108,12 @@ upcontext(pTHX_ I32 count)
    iteration of the loop. That is because oldcop then
    points to the last cop in the body of the loop, which
    is lexically *ahead* of the calling point.
+
+   Another change in 0.13: if end_of_block == TRUE, then go
+   up another level beyond the sub.
 */
 PERL_CONTEXT*
-upcontext_plus(pTHX_ I32 count)
+upcontext_plus(pTHX_ I32 count, bool end_of_block)
 {
     PERL_SI *top_si = PL_curstackinfo;
     I32 cxix = dopoptosub(aTHX_ cxstack_ix);
@@ -165,7 +168,7 @@ upcontext_plus(pTHX_ I32 count)
             return cx;
         }
     }
-    return cx;
+    return ((end_of_block && cxix > 1) ? &ccstack[cxix-1] : cx);
 }
 
 /* inspired (loosely) by pp_wantarray */
@@ -268,9 +271,9 @@ find_ancestors_from(OP* start, OP* next, oplist* l)
     }
     else ll = l->length;
    
-    /*printf("Looking for 0x%x starting at 0x%x\n", next, start);*/
+    /* printf("Looking for 0x%x starting at 0x%x\n", next, start); */
     for (o = start; o; p = o, o = o->op_sibling, ++cn) {
-        /*printf("(0x%x) %s -> 0x%x\n", o, PL_op_name[o->op_type], o->op_next);*/
+        /* printf("(0x%x) %s -> 0x%x\n", o, PL_op_name[o->op_type], o->op_next);*/
 
         if (o->op_type == OP_ENTERSUB && o->op_next == next)
             return pushop(l, Nullop, cn);
@@ -302,9 +305,9 @@ find_return_op(pTHX_ I32 uplevel)
 }
 
 OP*
-find_start_cop(pTHX_ I32 uplevel)
+find_start_cop(pTHX_ I32 uplevel, bool end_of_block)
 {
-    PERL_CONTEXT* cx = upcontext_plus(aTHX_ uplevel);
+    PERL_CONTEXT* cx = upcontext_plus(aTHX_ uplevel, end_of_block);
     if (!cx) TOO_FAR;
     return (OP*) cx->blk_oldcop;
 }
@@ -317,7 +320,8 @@ oplist*
 ancestor_ops (I32 uplevel, OP** return_op_out)
 {
     OP* return_op = find_return_op(aTHX_ uplevel);
-    OP* start_cop = find_start_cop(aTHX_ uplevel);
+    OP* start_cop = find_start_cop(aTHX_ uplevel,
+	return_op->op_type == OP_LEAVE);
     
     if (return_op_out)
         *return_op_out = return_op;
@@ -383,7 +387,7 @@ count_list (OP* parent, OP* returnop)
         
     /*printf("count_list: returnop = 0x%x\n", returnop);*/
     for(o = cUNOPx(parent)->op_first; o; o=o->op_sibling) {
-        /*printf("\t%-8s\t(0x%x)\n", PL_op_name[o->op_type], o->op_next);*/
+        /* printf("\t%-8s\t(0x%x)\n", PL_op_name[o->op_type], o->op_next);*/
         if (returnop && o->op_type == OP_ENTERSUB && o->op_next == returnop)
             return i;
         if (o->op_type == OP_RV2AV || o->op_type == OP_RV2HV || o->op_type == OP_ENTERSUB)
@@ -516,7 +520,7 @@ I32 uplevel;
       retval = o ? PL_op_name[o->op_type] : "(none)";
     }
     if (GIMME == G_ARRAY) {
-	EXTEND(SP, 1);
+	EXTEND(SP, 2);
 	PUSHs(sv_2mortal(newSVpv(retval, 0)));
 	PUSHs(sv_2mortal(newSVpv(PL_op_name[r->op_type], 0)));
     }
