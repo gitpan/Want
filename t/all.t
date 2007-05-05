@@ -1,4 +1,4 @@
-BEGIN { $| = 1; print "1..58\n"; }
+BEGIN { $| = 1; print "1..70\n"; }
 
 # Test that we can load the module
 END {print "not ok 1\n" unless $loaded;}
@@ -172,7 +172,13 @@ sub main::23 {}
 sub tCOUNT {
   my ($t, $w) = @_;
   my $a = want('COUNT');
-  print ($w == $a ? "ok $t\n" : "not ok $t\t# $a\n");
+  if (!defined $w and !defined $a) {
+    print "ok $t\n";
+  }
+  else {
+    print ($w == $a ? "ok $t\n" : "not ok $t\t# $a\n");
+  }
+  return
 }
 
 tCOUNT(54, 0);
@@ -192,3 +198,21 @@ sub not_lvaluable {
 }
 
 sub{}->(not_lvaluable());
+
+my @x = tCOUNT(59, undef);
+@::x  = tCOUNT(60, undef);
+
+(my $x, @x) = tCOUNT(61, undef);
+($x, @::x)  = tCOUNT(62, undef);
+
+(undef, undef, @x)    = tCOUNT(63, undef);
+(undef, undef, @::x)  = tCOUNT(64, undef);
+
+(@x, @::x) = tCOUNT(65, undef);
+(@::x, @::x) = tCOUNT(66, undef);
+
+my %x = tCOUNT(67, undef);
+%::x  = tCOUNT(68, undef);
+
+%x    = (a => 1, tCOUNT(69, undef));
+%::x  = (a => 2, tCOUNT(70, undef));

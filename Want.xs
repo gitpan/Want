@@ -355,6 +355,8 @@ I32 count_slice (OP* o) {
     else if (l)
         switch (l->op_type) {
         case OP_RV2AV:
+        case OP_PADAV:
+        case OP_PADHV:
         case OP_RV2HV:
             return 0;
         case OP_HSLICE:
@@ -390,7 +392,9 @@ count_list (OP* parent, OP* returnop)
         /* printf("\t%-8s\t(0x%x)\n", PL_op_name[o->op_type], o->op_next);*/
         if (returnop && o->op_type == OP_ENTERSUB && o->op_next == returnop)
             return i;
-        if (o->op_type == OP_RV2AV || o->op_type == OP_RV2HV || o->op_type == OP_ENTERSUB)
+        if (o->op_type == OP_RV2AV || o->op_type == OP_RV2HV
+         || o->op_type == OP_PADAV || o->op_type == OP_PADHV
+         || o->op_type == OP_ENTERSUB)
             return 0;
         
         if (o->op_type == OP_HSLICE || o->op_type == OP_ASLICE) {
@@ -541,6 +545,7 @@ I32 uplevel;
     if (o && o->op_type == OP_AASSIGN) {
         I32 lhs = count_list(cBINOPo->op_last,  Nullop  );
         I32 rhs = countstack(uplevel);
+        /* printf("lhs = %d, rhs = %d\n", lhs, rhs); */
         if      (lhs == 0) RETVAL = -1;         /* (..@x..) = (..., foo(), ...); */
         else if (rhs >= lhs-1) RETVAL =  0;
         else RETVAL = lhs - rhs - 1;
