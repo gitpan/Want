@@ -445,7 +445,7 @@ copy_rvals(I32 uplevel, I32 skip)
     if (!cx) return Nullav;
     a = newAV();
     for(i=mark_from+1; i<=mark_to; ++i)
-        if (skip-- <= 0) av_push(a, PL_stack_base[i]);
+        if (skip-- <= 0) av_push(a, newSVsv(PL_stack_base[i]));
     /* printf("avlen = %d\n", av_len(a)); */
 
     return a;
@@ -462,7 +462,7 @@ copy_rval(I32 uplevel)
     if (!cx) return Nullav;
     a = newAV();
     /* printf("oldmarksp = %d\n", oldmarksp); */
-    av_push(a, PL_stack_base[PL_markstack[oldmarksp+1]]);
+    av_push(a, newSVsv(PL_stack_base[PL_markstack[oldmarksp+1]]));
 
     return a;
 }
@@ -521,7 +521,7 @@ I32 uplevel;
           && (second = first->op_sibling) && second->op_sibling != Nullop)
       retval = "method_call";
     else {
-      retval = o ? PL_op_name[o->op_type] : "(none)";
+      retval = o ? (char *)PL_op_name[o->op_type] : "(none)";
     }
     if (GIMME == G_ARRAY) {
 	EXTEND(SP, 2);
@@ -627,7 +627,7 @@ U32 uplevel;
     oplist* os = ancestor_ops(uplevel, &returnop);
     numop* lno = os ? lastnumop(os) : (numop*)0;
     OPCODE type;
-  CODE:
+  PPCODE:
     if (lno) type = lno->numop_op->op_type;
     if (lno && (type == OP_AASSIGN || type == OP_SASSIGN) && lno->numop_num == 1)
       if (type == OP_AASSIGN) {
@@ -644,10 +644,9 @@ U32 uplevel;
       r = Nullav;
     }
     
-    RETVAL = r ? newRV_inc((SV*) r) : &PL_sv_undef;
     if (os) free(os);
-  OUTPUT:
-    RETVAL
+    EXTEND(SP, 1);
+    PUSHs(r ? sv_2mortal(newRV_noinc((SV*) r)) : &PL_sv_undef);
 
 void
 double_return()
