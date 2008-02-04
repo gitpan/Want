@@ -14,6 +14,11 @@
   (PERL_REVISION == 5 && PERL_VERSION == 9 && PERL_SUBVERSION < 2) \
 )
 
+/* After 5.10, the CxLVAL macro was added. */
+#ifndef CxLVAL
+#  define CxLVAL(cx) cx->blk_sub.lval
+#endif
+
 /* Stolen from B.xs */
 
 #ifdef PERL_OBJECT
@@ -161,7 +166,12 @@ upcontext_plus(pTHX_ I32 count, bool end_of_block)
             if (debugger_trouble && i > 0) return tcx;
         default:
             continue;
+#ifdef CXt_LOOP_PLAIN
+        case CXt_LOOP_PLAIN:
+        case CXt_LOOP_FOR:
+#else
         case CXt_LOOP:
+#endif
             return tcx;
         case CXt_SUB:
         case CXt_FORMAT:
@@ -500,7 +510,7 @@ I32 uplevel;
     if (!cx) TOO_FAR;
     
     if (CvLVALUE(cx->blk_sub.cv))
-	RETVAL = cx->blk_sub.lval;
+	RETVAL = CxLVAL(cx);
     else
 	RETVAL = 0;
   OUTPUT:

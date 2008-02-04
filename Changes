@@ -89,3 +89,5 @@ Revision history for Perl extension Want.
     - Make sure there are no ._ files in the tarball
     - Refuse to run Makefile.PL with Perl < 5.006
 
+0.17  Sun Feb  3 22:30:30 GMT 2008
+    - Be compatible with internals changes post-5.10 (new loop contexts & CxLVAL)
