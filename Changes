@@ -91,3 +91,6 @@ Revision history for Perl extension Want.
 
 0.17  Sun Feb  3 22:30:30 GMT 2008
     - Be compatible with internals changes post-5.10 (new loop contexts & CxLVAL)
+
+0.18  Mon Feb  4 09:35:56 GMT 2008
+    - Code identical to 0.17; eliminate ._files by using gnutar.
