@@ -12,7 +12,7 @@ our @ISA = qw(Exporter DynaLoader);
 
 our @EXPORT = qw(want rreturn lnoreturn);
 our @EXPORT_OK = qw(howmany wantref);
-our $VERSION = '0.20';
+our $VERSION = '0.21';
 
 bootstrap Want $VERSION;
 
@@ -172,14 +172,12 @@ sub rreturn (@) {
     return wantarray ? @_ : $_[$#_];
 }
 
-my $dummy_lvalue;
-my $another_reference_to_dummy_lvalue = \$dummy_lvalue; # Avoid "useless assignment to a temporary" warning
 sub lnoreturn () {
     if (!want_lvalue(1) || !want_assign(1)) {
         croak "Can't lnoreturn except in ASSIGN context";
     }
     double_return();
-    return $dummy_lvalue;
+    return disarm_temp(my $undef);
 }
 
 # Some naughty people were relying on these internal methods.
@@ -499,7 +497,8 @@ A full list of the permitted keyword is in the B<ARGUMENTS> section below.
 Use this function instead of C<return> from inside an lvalue subroutine when
 you know that you're in RVALUE context. If you try to use a normal C<return>,
 you'll get a compile-time error in Perl 5.6.1 and above unless you return an
-lvalue.
+lvalue. (Note: this is no longer true in Perl 5.16, where an ordinary return
+will once again work.)
 
 =item lnoreturn
 
@@ -510,7 +509,7 @@ appropriate action.
 If you use C<rreturn> or C<lnoreturn>, then you have to put a bare C<return;>
 at the very end of your lvalue subroutine, in order to stop the Perl compiler
 from complaining. Think of it as akin to the C<1;> that you have to put at the
-end of a module.
+end of a module. (Note: this is no longer true in Perl 5.16.)
 
 =item howmany()
 
@@ -692,7 +691,8 @@ context. Let me know if this is a problem.
 
 Robin Houston, E<lt>robin@cpan.orgE<gt>
 
-Thanks to Damian Conway for encouragement and good suggestions.
+Thanks to Damian Conway for encouragement and good suggestions,
+and Father Chrysostomos for a patch.
 
 =head1 SEE ALSO
 
@@ -711,7 +711,7 @@ http://dev.perl.org/rfc/21.html
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001-2006, Robin Houston. All Rights Reserved.
+Copyright (c) 2001-2012, Robin Houston. All Rights Reserved.
 This module is free software. It may be used, redistributed
 and/or modified under the same terms as Perl itself.
 
